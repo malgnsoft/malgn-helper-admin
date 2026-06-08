@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@source "../..";
+
+/* Pretendard (한글) + DM Sans (라틴·숫자) — handoff_noti 디자인 가이드 */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
+
+:root {
+  font-family: "DM Sans", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+
+/* OS 다크 모드 무관하게 라이트 톤 유지 (PMS와 일관) */
+html,
+body {
+  background-color: #f8fafc; /* slate-50 — handoff_noti 본문 배경 */
+  color: #0f172a; /* slate-900 */
+}
