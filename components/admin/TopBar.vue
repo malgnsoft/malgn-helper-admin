@@ -21,6 +21,11 @@ const crumbs = computed(() => {
 });
 
 const env = useState<"dev" | "prod">("admin-env", () => "prod");
+
+async function doLogout() {
+  await logout();
+  await navigateTo("/login");
+}
 </script>
 
 <template>
@@ -97,6 +102,7 @@ const env = useState<"dev" | "prod">("admin-env", () => "prod");
       type="button"
       class="inline-flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
       title="로그아웃"
+      @click="doLogout"
     >
       <LogOut class="size-4" />
     </button>

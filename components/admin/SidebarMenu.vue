@@ -52,9 +52,9 @@ const ICONS: Record<string, any> = {
 };
 
 const route = useRoute();
-// 현재 역할 — 추후 Cloudflare Access JWT에서 추출. MVP는 admin 가정.
-const currentRole = ref<Role>("admin");
-const menu = useAdminMenu(currentRole.value);
+const authUser = useAuthUser();
+const currentRole = computed<Role>(() => (authUser.value ? roleOf(authUser.value.level) : "agent"));
+const menu = computed(() => useAdminMenu(currentRole.value).value);
 const badges = useAdminBadges();
 
 // 그룹 접기 상태 (localStorage 저장)
@@ -173,18 +173,18 @@ function isActive(path: string): boolean {
     </nav>
 
     <!-- 사용자 칩 -->
-    <div class="border-t border-slate-100 px-3 py-3">
+    <div v-if="authUser" class="border-t border-slate-100 px-3 py-3">
       <div class="flex items-center gap-2.5 rounded-md bg-slate-50 px-2.5 py-2">
         <span
           class="inline-flex size-7 items-center justify-center rounded-full bg-primary-100 text-[11px] font-semibold text-primary-700"
         >
-          김현
+          {{ (authUser.name || authUser.loginId).slice(0, 2) }}
         </span>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-[12px] font-semibold text-slate-900">김현희</p>
+          <p class="truncate text-[12px] font-semibold text-slate-900">{{ authUser.name || authUser.loginId }}</p>
           <p class="truncate text-[10px] text-slate-500">
             <span class="font-mono">{{ currentRole }}</span>
-            · ai@malgnsoft.com
+            · {{ authUser.email || authUser.loginId }}
           </p>
         </div>
       </div>
