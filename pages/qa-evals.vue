@@ -44,8 +44,13 @@ const COLUMNS: TableColumn[] = [
   { key: 'latency', label: '지연', align: 'right' },
 ]
 
+// 필터: draft 입력 → '조회'/Enter 시 적용. 정렬·빈결과는 서버 재조회, 검색어는 클라이언트 필터.
+const draftSort = ref<string>('recent')
+const draftIncludeEmpty = ref(false)
+const draftQ = ref('')
 const sort = ref<string>('recent')
 const includeEmpty = ref(false)
+const appliedQ = ref('')
 const rows = ref<EvalRow[]>([])
 const total = ref(0)
 const pending = ref(true)
@@ -77,7 +82,36 @@ async function load() {
   }
 }
 onMounted(load)
-watch([sort, includeEmpty], load)
+
+function applyFilter() {
+  sort.value = draftSort.value
+  includeEmpty.value = draftIncludeEmpty.value
+  appliedQ.value = draftQ.value
+  load()
+}
+function resetFilter() {
+  draftSort.value = 'recent'
+  draftIncludeEmpty.value = false
+  draftQ.value = ''
+  sort.value = 'recent'
+  includeEmpty.value = false
+  appliedQ.value = ''
+  load()
+}
+const filteredRows = computed(() => {
+  const q = appliedQ.value.trim().toLowerCase()
+  if (!q) return rows.value
+  return rows.value.filter(
+    (r) =>
+      (r.postSubject ?? '').toLowerCase().includes(q) ||
+      (r.projectName ?? '').toLowerCase().includes(q) ||
+      (r.overallVerdict ?? '').toLowerCase().includes(q) ||
+      String(r.postId).includes(q),
+  )
+})
+
+const selectCls =
+  'h-9 w-full rounded-md bg-white px-3 text-[13px] text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500'
 
 function fmtTime(iso: string) {
   if (!iso) return '—'
@@ -100,30 +134,38 @@ function scoreClass(s: number | null) {
       caption="운영 보드"
       title="Q&A 평가"
       description="상담사 응대를 5축으로 평가한 결과 — 행 클릭 시 PMS 평가 카드 열림"
-    >
-      <template #actions>
-        <div class="flex items-center gap-2">
-          <label class="flex items-center gap-1.5 text-[12px] text-slate-600">
-            <input
-              v-model="includeEmpty"
-              type="checkbox"
-              class="size-3.5 rounded border-slate-300"
-            />
-            빈 결과 포함
-          </label>
-          <AdminSegment v-model="sort" :options="SORT_OPTS" />
-        </div>
-      </template>
-    </AdminPageHeader>
+    />
+
+    <!-- 필터 바 -->
+    <AdminFilterBar @search="applyFilter" @reset="resetFilter">
+      <AdminFilterField label="정렬">
+        <select v-model="draftSort" :class="selectCls">
+          <option v-for="o in SORT_OPTS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="빈 결과">
+        <select v-model="draftIncludeEmpty" :class="selectCls">
+          <option :value="false">제외</option>
+          <option :value="true">포함</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="검색어" grow>
+        <AdminSearchInput
+          v-model="draftQ"
+          placeholder="게시글 제목 · 프로젝트 · 한 줄 평 검색 후 Enter"
+          @keyup.enter="applyFilter"
+        />
+      </AdminFilterField>
+    </AdminFilterBar>
 
     <AdminDataTable
       :columns="COLUMNS"
-      :rows="rows"
+      :rows="filteredRows"
       :pending="pending"
       :error="error"
       title="전체 "
       :total="total"
-      :shown="rows.length"
+      :shown="filteredRows.length"
       empty-text="조건에 맞는 평가 결과 없음"
     >
       <template #default="{ row }: { row: EvalRow }">

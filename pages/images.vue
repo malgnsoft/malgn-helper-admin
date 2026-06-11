@@ -30,6 +30,9 @@ const SOURCE_OPTS = [
   { value: 'reply', label: '응답' },
 ]
 
+// 필터: draft 입력 → '조회'/Enter 시 applied(search/sourceFilter)로 반영 후 load()
+const draftSearch = ref('')
+const draftSource = ref<'' | 'inquiry' | 'reply'>('')
 const search = ref('')
 const sourceFilter = ref<'' | 'inquiry' | 'reply'>('')
 const rows = ref<Img[]>([])
@@ -63,12 +66,21 @@ async function load() {
 }
 onMounted(load)
 
-let timer: ReturnType<typeof setTimeout>
-watch(search, () => {
-  clearTimeout(timer)
-  timer = setTimeout(load, 400)
-})
-watch(sourceFilter, load)
+function applyFilter() {
+  search.value = draftSearch.value
+  sourceFilter.value = draftSource.value
+  load()
+}
+function resetFilter() {
+  draftSearch.value = ''
+  draftSource.value = ''
+  search.value = ''
+  sourceFilter.value = ''
+  load()
+}
+
+const selectCls =
+  'h-9 w-full rounded-md bg-white px-3 text-[13px] text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500'
 
 function fmtTime(iso: string | null) {
   if (!iso) return '—'
@@ -88,20 +100,28 @@ function fmtTime(iso: string | null) {
     />
 
     <!-- 필터 바 -->
-    <section class="mb-4 flex flex-wrap items-center gap-3">
-      <AdminSearchInput
-        v-model="search"
-        placeholder="title·description 검색"
-        class="max-w-md flex-1"
-      />
-      <AdminSegment v-model="sourceFilter" :options="SOURCE_OPTS" />
-      <span class="ml-auto text-[12px] text-slate-500">
-        총
-        <span class="font-mono font-semibold tabular-nums text-slate-800">
-          {{ total.toLocaleString() }}
-        </span>건
-      </span>
-    </section>
+    <AdminFilterBar @search="applyFilter" @reset="resetFilter">
+      <AdminFilterField label="출처">
+        <select v-model="draftSource" :class="selectCls">
+          <option v-for="o in SOURCE_OPTS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="검색어" grow>
+        <AdminSearchInput
+          v-model="draftSearch"
+          placeholder="title · description 검색 후 Enter"
+          @keyup.enter="applyFilter"
+        />
+      </AdminFilterField>
+    </AdminFilterBar>
+
+    <!-- 결과 수 -->
+    <div class="mb-3 flex items-center justify-end text-[12px] text-slate-500">
+      총
+      <span class="mx-1 font-mono font-semibold tabular-nums text-slate-800">
+        {{ total.toLocaleString() }}
+      </span>건
+    </div>
 
     <!-- 로딩 -->
     <div

@@ -10,8 +10,9 @@ useHead({ title: "봇 관리 · 맑은도우미 Admin" });
 const { bots, ensureHydrated, remove, toggleStatus } = useBots();
 onMounted(ensureHydrated);
 
-const search = ref("");
-const statusFilter = ref<"" | BotStatus>("");
+// 필터: 입력(draft)은 '조회'/Enter 로 적용(applied)된다.
+const draft = reactive({ q: "", status: "" as "" | BotStatus, service: "", tone: "" as "" | Tone });
+const applied = reactive({ q: "", status: "" as "" | BotStatus, service: "", tone: "" as "" | Tone });
 
 const STATUS_FILTER_OPTS = [
   { value: "", label: "전체" },
@@ -19,11 +20,32 @@ const STATUS_FILTER_OPTS = [
   { value: "inactive", label: "비활성" },
   { value: "draft", label: "초안" },
 ];
+const SERVICE_FILTER_OPTS = [{ value: "", label: "전체" }, ...SERVICE_OPTS];
+const TONE_FILTER_OPTS = [
+  { value: "", label: "전체" },
+  ...TONE_OPTS.map((t) => ({ value: t.value, label: t.label })),
+];
+
+function applyFilter() {
+  applied.q = draft.q;
+  applied.status = draft.status;
+  applied.service = draft.service;
+  applied.tone = draft.tone;
+}
+function resetFilter() {
+  draft.q = "";
+  draft.status = "";
+  draft.service = "";
+  draft.tone = "";
+  applyFilter();
+}
 
 const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase();
+  const q = applied.q.trim().toLowerCase();
   return bots.value.filter((b) => {
-    if (statusFilter.value && b.status !== statusFilter.value) return false;
+    if (applied.status && b.status !== applied.status) return false;
+    if (applied.service && !b.services.includes(applied.service)) return false;
+    if (applied.tone && b.tone !== applied.tone) return false;
     if (!q) return true;
     return (
       b.name.toLowerCase().includes(q) ||
@@ -35,6 +57,9 @@ const filtered = computed(() => {
 });
 
 const activeCount = computed(() => bots.value.filter((b) => b.status === "active").length);
+
+const selectCls =
+  "h-9 w-full rounded-md bg-white px-3 text-[13px] text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500";
 
 const confirmId = ref<string | null>(null);
 const confirmTarget = computed(() => bots.value.find((b) => b.id === confirmId.value) ?? null);
@@ -72,20 +97,39 @@ function toneLabel(t: Tone) {
     </AdminPageHeader>
 
     <!-- 필터 바 -->
-    <section class="mb-4 flex flex-wrap items-center gap-3">
-      <AdminSearchInput
-        v-model="search"
-        placeholder="봇 이름 · 서비스 · 토픽 검색"
-        class="max-w-md flex-1"
-      />
-      <AdminSegment v-model="statusFilter" :options="STATUS_FILTER_OPTS" />
-      <span class="ml-auto text-[12px] text-slate-500">
-        활성
-        <span class="font-mono font-semibold tabular-nums text-emerald-600">{{ activeCount }}</span>
-        / 총
-        <span class="font-mono font-semibold tabular-nums text-slate-800">{{ bots.length }}</span>개
-      </span>
-    </section>
+    <AdminFilterBar @search="applyFilter" @reset="resetFilter">
+      <AdminFilterField label="구분(서비스)">
+        <select v-model="draft.service" :class="selectCls">
+          <option v-for="o in SERVICE_FILTER_OPTS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="상태">
+        <select v-model="draft.status" :class="selectCls">
+          <option v-for="o in STATUS_FILTER_OPTS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="말투">
+        <select v-model="draft.tone" :class="selectCls">
+          <option v-for="o in TONE_FILTER_OPTS" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
+      </AdminFilterField>
+      <AdminFilterField label="검색어" grow>
+        <AdminSearchInput
+          v-model="draft.q"
+          placeholder="봇 이름 · 서비스 · 토픽 검색 후 Enter"
+          @keyup.enter="applyFilter"
+        />
+      </AdminFilterField>
+    </AdminFilterBar>
+
+    <!-- 결과 수 -->
+    <div class="mb-3 flex items-center justify-end text-[12px] text-slate-500">
+      활성
+      <span class="mx-1 font-mono font-semibold tabular-nums text-emerald-600">{{ activeCount }}</span>
+      / 총
+      <span class="mx-1 font-mono font-semibold tabular-nums text-slate-800">{{ bots.length }}</span>개
+      <span class="ml-2 text-slate-400">· 표시 {{ filtered.length }}</span>
+    </div>
 
     <!-- 카드 그리드 -->
     <section
