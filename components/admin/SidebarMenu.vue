@@ -24,6 +24,7 @@ import {
   Users,
   ClipboardList,
   Code2,
+  Bot,
   Search,
   ChevronDown,
   MessageSquareDot,
@@ -49,6 +50,7 @@ const ICONS: Record<string, any> = {
   users: Users,
   "clipboard-list": ClipboardList,
   "code-2": Code2,
+  bot: Bot,
 };
 
 const route = useRoute();
