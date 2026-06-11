@@ -38,7 +38,7 @@ export const ADMIN_MENU: MenuGroup[] = [
     items: [
       { key: "bots", label: "봇 관리", path: "/bots", icon: "bot" },
       { key: "standard-answers", label: "표준답변", path: "/standard-answers", icon: "bookmark" },
-      { key: "materials", label: "자료", path: "/materials", icon: "file-text" },
+      { key: "materials", label: "학습 자료", path: "/materials", icon: "file-text" },
       { key: "images", label: "이미지 카탈로그", path: "/images", icon: "image" },
       { key: "catalog", label: "토픽·서비스", path: "/catalog", icon: "tag", roles: ["admin", "developer"] },
     ],

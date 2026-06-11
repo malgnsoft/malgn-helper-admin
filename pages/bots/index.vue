@@ -187,6 +187,14 @@ function toneLabel(t: Tone) {
               <span v-if="!b.services.length" class="text-[11px] text-slate-400">미지정</span>
             </dd>
           </div>
+          <div class="flex items-center gap-2">
+            <dt class="w-12 shrink-0 text-slate-400">학습</dt>
+            <dd class="text-slate-600">
+              <span class="font-mono font-semibold text-slate-700">{{ b.materialSetIds.length }}</span>개 자료
+              <span class="text-slate-300">·</span>
+              {{ b.useStandardAnswers ? "표준답변 사용" : "표준답변 미사용" }}
+            </dd>
+          </div>
           <div v-if="b.traits.length" class="flex items-start gap-2">
             <dt class="w-12 shrink-0 pt-0.5 text-slate-400">성격</dt>
             <dd class="flex flex-wrap gap-1">

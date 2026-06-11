@@ -33,7 +33,7 @@ const COLUMNS: TableColumn[] = [
   { key: 'model',    label: '모델' },
   { key: 'tokens',   label: '토큰(P+C)', align: 'right' },
   { key: 'latency',  label: '지연',      align: 'right' },
-  { key: 'cost',     label: '비용',      align: 'right' },
+  { key: 'cost',     label: '비용',      align: 'right', class: 'px-3 min-w-[128px]' },
   { key: 'cache',    label: '캐시',      align: 'center' },
   { key: 'error',    label: '오류',      align: 'center' },
 ]
@@ -89,7 +89,7 @@ function fmtTime(iso: string) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
-function fmtCost(v: number | null) { return v != null ? `$${v.toFixed(4)}` : '—' }
+function fmtCost(v: number | null) { return v != null ? `$${v.toFixed(6)}` : '—' }
 function totalTokens(r: LogRow) {
   const p = r.promptTokens ?? 0
   const c = r.completionTokens ?? 0
@@ -162,7 +162,7 @@ function totalTokens(r: LogRow) {
           <td class="px-3 py-2.5 text-right font-mono text-[11px] tabular-nums text-slate-500">
             {{ row.latencyMs ?? '—' }}ms
           </td>
-          <td class="px-3 py-2.5 text-right font-mono text-[11px] tabular-nums text-slate-700">
+          <td class="min-w-[128px] whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] tabular-nums text-slate-700">
             {{ fmtCost(row.costUsd) }}
           </td>
           <td class="px-3 py-2.5 text-center">

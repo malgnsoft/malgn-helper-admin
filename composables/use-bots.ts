@@ -88,14 +88,6 @@ export const STD_SCOPE_OPTS: { value: StdAnswerScope; label: string }[] = [
   { value: "service", label: "이 봇의 서비스만" },
 ];
 
-export const MATERIAL_SETS = [
-  { id: "manuals", label: "매뉴얼 문서", hint: "PDF·DOCX·HWP 등 제품 매뉴얼" },
-  { id: "videos", label: "동영상 스크립트", hint: "교육 영상 트랜스크립트" },
-  { id: "legacy-qa", label: "기존 Q&A", hint: "PMS 누적 상담 1,358건" },
-  { id: "std-answers", label: "표준답변 카탈로그", hint: "검증된 표준답변" },
-  { id: "faq", label: "FAQ 모음", hint: "자주 묻는 질문 정리" },
-];
-
 export const MODEL_OPTS = [
   { value: "openai/gpt-4.1-mini", label: "GPT-4.1 mini (기본)" },
   { value: "openai/gpt-4.1", label: "GPT-4.1" },
@@ -138,7 +130,7 @@ const SEED_BOTS: Bot[] = [
     unknownPolicy: "strict",
     escalationThreshold: 0.5,
     refusalTopics: ["환불 금액 확정", "계약 조건 변경"],
-    materialSetIds: ["manuals", "faq", "std-answers"],
+    materialSetIds: ["mat-user-manual", "mat-faq", "mat-legacy-qa"],
     useStandardAnswers: true,
     standardAnswerScope: "all",
     excludeRules: "비공개 댓글 본문, 내부 운영 메모는 인용 금지",
@@ -164,7 +156,7 @@ const SEED_BOTS: Bot[] = [
     unknownPolicy: "strict",
     escalationThreshold: 0.7,
     refusalTopics: ["개별 환불 금액 확정", "예외 승인"],
-    materialSetIds: ["std-answers", "manuals"],
+    materialSetIds: ["mat-refund-policy", "mat-faq"],
     useStandardAnswers: true,
     standardAnswerScope: "service",
     excludeRules: "금액을 직접 계산해 단정하지 말 것. 항상 담당자 확인 권유.",
@@ -190,7 +182,7 @@ const SEED_BOTS: Bot[] = [
     unknownPolicy: "normal",
     escalationThreshold: 0.6,
     refusalTopics: ["내부 시스템 구조 노출", "개인정보 조회"],
-    materialSetIds: ["manuals", "legacy-qa"],
+    materialSetIds: ["mat-admin-manual", "mat-public-guide", "mat-security-guide"],
     useStandardAnswers: true,
     standardAnswerScope: "service",
     excludeRules: "고객사 식별정보·개인정보는 마스킹. 내부 자료 출처는 외부에 노출 금지.",
@@ -270,6 +262,19 @@ export function useBots() {
     persist();
   }
 
+  /** 자료가 삭제될 때 모든 봇의 학습 소스에서 해당 자료 id 제거 */
+  function pruneMaterial(materialId: string) {
+    let changed = false;
+    for (const b of bots.value) {
+      const i = b.materialSetIds.indexOf(materialId);
+      if (i >= 0) {
+        b.materialSetIds.splice(i, 1);
+        changed = true;
+      }
+    }
+    if (changed) persist();
+  }
+
   /** 새 봇 기본값 */
   function blankBot(): Bot {
     const id = `bot-${Date.now().toString(36)}`;
@@ -290,7 +295,7 @@ export function useBots() {
       unknownPolicy: "strict",
       escalationThreshold: 0.5,
       refusalTopics: [],
-      materialSetIds: ["std-answers"],
+      materialSetIds: [],
       useStandardAnswers: true,
       standardAnswerScope: "all",
       excludeRules: "",
@@ -301,5 +306,5 @@ export function useBots() {
     };
   }
 
-  return { bots, ensureHydrated, get, upsert, remove, toggleStatus, resetSeed, blankBot };
+  return { bots, ensureHydrated, get, upsert, remove, toggleStatus, resetSeed, pruneMaterial, blankBot };
 }

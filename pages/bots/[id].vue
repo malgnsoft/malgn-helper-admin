@@ -4,11 +4,28 @@
   섹션: 기본정보 · 캐릭터(페르소나) · 답변범위 · 학습소스 · 모델 파라미터.
 -->
 <script setup lang="ts">
-import { ArrowLeft, Trash2, Save } from "lucide-vue-next";
+import {
+  ArrowLeft,
+  Trash2,
+  Save,
+  FileText,
+  Link as LinkIcon,
+  Type as TypeIcon,
+  MessagesSquare,
+  RefreshCw,
+} from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
 const { get, upsert, remove, blankBot, ensureHydrated } = useBots();
+const { materials, ensureHydrated: ensureMaterials, byIds } = useMaterials();
+
+const TYPE_ICON: Record<MaterialType, unknown> = {
+  file: FileText,
+  url: LinkIcon,
+  text: TypeIcon,
+  qa: MessagesSquare,
+};
 
 const routeId = route.params.id as string;
 const isNew = computed(() => routeId === "new");
@@ -19,6 +36,7 @@ const form = reactive<Bot>(blankBot());
 
 onMounted(() => {
   ensureHydrated();
+  ensureMaterials();
   if (isNew.value) {
     Object.assign(form, blankBot());
   } else {
@@ -39,6 +57,22 @@ function toggle(arr: string[], val: string) {
   if (i >= 0) arr.splice(i, 1);
   else arr.push(val);
 }
+
+// ── 학습 소스 피커 (자료 라이브러리에서 선택) ──
+const materialSearch = ref("");
+const pickerMaterials = computed(() => {
+  const q = materialSearch.value.trim().toLowerCase();
+  if (!q) return materials.value;
+  return materials.value.filter(
+    (m) => m.name.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q)),
+  );
+});
+const selectedMaterials = computed(() => byIds(form.materialSetIds));
+const selectedStats = computed(() => ({
+  count: selectedMaterials.value.length,
+  chunks: selectedMaterials.value.reduce((a, m) => a + m.chunks, 0),
+  processing: selectedMaterials.value.filter((m) => m.status === "processing").length,
+}));
 
 // ── 콤마 구분 태그 프록시 ──
 const topicsText = computed({
@@ -284,25 +318,61 @@ function chipCls(on: boolean) {
           title="학습 소스"
           description="봇이 근거로 삼을 자료셋과 표준답변을 지정합니다. (인덱싱 연동은 API 보강 예정)"
         >
-          <AdminFormRow label="학습 자료셋" hint="이 봇이 검색·인용할 지식 소스">
-            <div class="space-y-2">
-              <label
-                v-for="m in MATERIAL_SETS"
-                :key="m.id"
-                class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 p-2.5 transition hover:bg-slate-50"
-                :class="form.materialSetIds.includes(m.id) ? 'border-primary-300 bg-primary-50/40' : ''"
-              >
-                <input
-                  type="checkbox"
-                  :checked="form.materialSetIds.includes(m.id)"
-                  class="mt-0.5 size-4 accent-primary-600"
-                  @change="toggle(form.materialSetIds, m.id)"
-                />
-                <span class="min-w-0">
-                  <span class="block text-[13px] font-medium text-slate-800">{{ m.label }}</span>
-                  <span class="block text-[11px] text-slate-400">{{ m.hint }}</span>
+          <AdminFormRow label="학습 자료" hint="라이브러리에서 이 봇이 학습할 소스를 고릅니다">
+            <div>
+              <!-- 선택 요약 + 관리 링크 -->
+              <div class="mb-2 flex flex-wrap items-center gap-2">
+                <span class="text-[12px] text-slate-500">
+                  선택 <span class="font-mono font-semibold text-primary-700">{{ selectedStats.count }}</span>개 · 청크 합계
+                  <span class="font-mono font-semibold text-slate-700">{{ selectedStats.chunks.toLocaleString() }}</span>
+                  <span v-if="selectedStats.processing" class="text-blue-600"> · 처리중 {{ selectedStats.processing }}</span>
                 </span>
-              </label>
+                <NuxtLink to="/materials" class="ml-auto text-[12px] font-medium text-primary-600 hover:underline">
+                  자료 추가·관리 →
+                </NuxtLink>
+              </div>
+              <input v-model="materialSearch" :class="inputCls + ' mb-2'" placeholder="자료명·태그로 검색" />
+              <!-- 소스 목록 -->
+              <div
+                v-if="pickerMaterials.length"
+                class="max-h-80 space-y-1 overflow-auto rounded-lg border border-slate-200 p-2"
+              >
+                <label
+                  v-for="m in pickerMaterials"
+                  :key="m.id"
+                  class="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition"
+                  :class="form.materialSetIds.includes(m.id) ? 'border-primary-300 bg-primary-50/50' : 'border-transparent hover:bg-slate-50'"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="form.materialSetIds.includes(m.id)"
+                    class="mt-0.5 size-4 accent-primary-600"
+                    @change="toggle(form.materialSetIds, m.id)"
+                  />
+                  <span class="flex size-7 shrink-0 items-center justify-center rounded-md" :class="MATERIAL_TYPE_META[m.type].cls">
+                    <component :is="TYPE_ICON[m.type]" class="size-3.5" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center gap-1.5">
+                      <span class="truncate text-[13px] font-medium text-slate-800">{{ m.name }}</span>
+                      <span
+                        class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ring-1 ring-inset"
+                        :class="MATERIAL_STATUS_META[m.status].cls"
+                      >
+                        <RefreshCw v-if="m.status === 'processing'" class="size-2 animate-spin" />{{ MATERIAL_STATUS_META[m.status].label }}
+                      </span>
+                    </span>
+                    <span class="mt-0.5 block truncate text-[11px] text-slate-400">
+                      {{ MATERIAL_TYPE_META[m.type].label }} ·
+                      {{ m.status === "indexed" ? `청크 ${m.chunks}` : m.format }} · {{ m.summary }}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <p v-else class="rounded-lg border border-dashed border-slate-200 p-4 text-center text-[12px] text-slate-400">
+                자료가 없습니다.
+                <NuxtLink to="/materials" class="text-primary-600 hover:underline">자료 라이브러리</NuxtLink>에서 먼저 추가하세요.
+              </p>
             </div>
           </AdminFormRow>
           <AdminFormRow label="표준답변 우선 사용">
