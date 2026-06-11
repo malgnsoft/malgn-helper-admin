@@ -11,5 +11,10 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: "cloudflare-pages",
+    esbuild: {
+      options: {
+        target: "es2020",
+      },
+    },
   },
 });

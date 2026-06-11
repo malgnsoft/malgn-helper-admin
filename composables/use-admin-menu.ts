@@ -2,7 +2,7 @@
 // admin 사이드바 메뉴 정의. 기획서(ADMIN-PLAN.md §3-2)와 1:1 매핑.
 // 권한: 'admin' | 'developer' | 'agent' — 빈 배열이면 누구나 표시.
 
-export type Role = "admin" | "developer" | "agent";
+export type { Role } from "./use-auth";
 
 export type MenuLeaf = {
   key: string;
