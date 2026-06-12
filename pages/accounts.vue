@@ -1,10 +1,9 @@
 <!--
   pages/accounts.vue — 계정 관리.
-  실 데이터: GET /auth/me (현재 로그인 세션).
-  목록: 목업 (GET /accounts 엔드포인트 미구현 → API 담당 협의 필요).
+  API: GET /accounts (검색 q · 페이징 page/pageSize, tb_user 직원 스코프 목록).
 -->
 <script setup lang="ts">
-import { UserPlus, Users } from 'lucide-vue-next'
+import { UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import type { TableColumn } from '~/components/admin/DataTable.vue'
 
 useHead({ title: '계정 · 맑은도우미 Admin' })
@@ -18,9 +17,15 @@ type User = {
   email: string
   company: string
   level: number
-  lastLogin?: string
-  isActive?: boolean
-  isMock?: boolean
+  lastLogin: string | null
+  isActive: boolean
+}
+
+type AccountsResponse = {
+  page: number
+  pageSize: number
+  total: number
+  rows: User[]
 }
 
 const COLUMNS: TableColumn[] = [
@@ -37,38 +42,66 @@ const ROLE_META: Record<string, { label: string; cls: string }> = {
   agent:     { label: 'agent',     cls: 'bg-slate-100 text-slate-700' },
 }
 
+const PAGE_SIZE = 20
+
+const meSession = useAuthUser()
+const search = ref('')
+const page = ref(1)
+const total = ref(0)
+const rows = ref<User[]>([])
+const pending = ref(true)
+const error = ref<string | null>(null)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * PAGE_SIZE + 1))
+const rangeEnd = computed(() => Math.min(page.value * PAGE_SIZE, total.value))
+
+async function load() {
+  pending.value = true
+  error.value = null
+  try {
+    const url = new URL(`${API_BASE}/accounts`)
+    url.searchParams.set('page', String(page.value))
+    url.searchParams.set('pageSize', String(PAGE_SIZE))
+    if (search.value.trim()) url.searchParams.set('q', search.value.trim())
+    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    if (!res.ok) throw new Error(res.status === 403 ? '계정 목록 조회 권한이 없습니다.' : `API ${res.status}`)
+    const data = (await res.json()) as AccountsResponse
+    rows.value = data.rows ?? []
+    total.value = data.total ?? rows.value.length
+  } catch (e) {
+    error.value = (e as Error).message
+    rows.value = []
+    total.value = 0
+  } finally {
+    pending.value = false
+  }
+}
+
+onMounted(load)
+
+let debounce: ReturnType<typeof setTimeout>
+watch(search, () => {
+  clearTimeout(debounce)
+  debounce = setTimeout(() => { page.value = 1; load() }, 400)
+})
+watch(page, load)
+
+function goPrev() { if (page.value > 1) page.value -= 1 }
+function goNext() { if (page.value < totalPages.value) page.value += 1 }
+
+function isMe(row: User) {
+  const s = meSession.value
+  return !!s && (s.id === row.id || s.loginId === row.loginId || s.email === row.email)
+}
+
 function roleOf(level: number) {
   if (level >= 9) return 'admin'
   if (level >= 5) return 'developer'
   return 'agent'
 }
 
-/* 목업 사용자 목록 (현재 사용자로 첫 번째 행 교체) */
-const MOCK_USERS: User[] = [
-  { id: 1, loginId: 'dotype', name: '김도형', email: 'dotype@malgnsoft.com', company: '맑은소프트', level: 9, lastLogin: '2026-06-11T09:00:00', isActive: true },
-  { id: 2, loginId: 'dev01',  name: '박지훈', email: 'jihoon@malgnsoft.com', company: '맑은소프트', level: 7, lastLogin: '2026-06-10T18:32:00', isActive: true, isMock: true },
-  { id: 3, loginId: 'cs01',   name: '이수연', email: 'suyeon@malgnsoft.com', company: '맑은소프트', level: 3, lastLogin: '2026-06-09T11:14:00', isActive: true, isMock: true },
-  { id: 4, loginId: 'cs02',   name: '정민석', email: 'minsuk@malgnsoft.com', company: '맑은소프트', level: 3, lastLogin: '2026-05-28T15:05:00', isActive: false, isMock: true },
-]
-
-const meSession = useAuthUser()
-const rows = ref<User[]>([])
-const pending = ref(true)
-
-onMounted(async () => {
-  // 현재 세션으로 첫 번째 행 실값 반영
-  const session = meSession.value
-  const merged = MOCK_USERS.map(u => {
-    if (session && (u.loginId === session.loginId || u.email === session.email)) {
-      return { ...u, name: session.name, email: session.email, company: session.company, level: session.level, isMock: false }
-    }
-    return u
-  })
-  rows.value = merged
-  pending.value = false
-})
-
-function fmtTime(iso?: string) {
+function fmtTime(iso: string | null) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso.slice(0, 10)
@@ -82,39 +115,37 @@ function fmtTime(iso?: string) {
     <AdminPageHeader
       caption="시스템"
       title="계정"
-      description="운영자·개발자·상담사 계정 및 역할을 관리합니다."
+      description="운영자·개발자·상담사 계정 및 역할을 관리합니다. (직원 스코프)"
     >
       <template #actions>
-        <div class="flex items-center gap-2">
-          <span class="text-[11px] text-slate-400">계정 목록 API 보강 예정</span>
-          <button
-            type="button"
-            disabled
-            title="계정 목록 API 보강 후 활성화"
-            class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-[13px] font-semibold text-slate-400"
-          >
-            <UserPlus class="size-4" />초대
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled
+          title="계정 초대 API 보강 후 활성화"
+          class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-[13px] font-semibold text-slate-400"
+        >
+          <UserPlus class="size-4" />초대
+        </button>
       </template>
     </AdminPageHeader>
 
-    <!-- API 보강 안내 -->
-    <div class="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
-      <span class="font-semibold">안내</span>
-      <span>현재 세션(자신) 정보는 실값이며, 나머지 행은 목업입니다.
-        <code class="font-mono">GET /accounts</code> · <code class="font-mono">PATCH /accounts/:id/role</code> 신설 후 완전 연동됩니다.</span>
+    <!-- 검색 -->
+    <div class="mb-4 flex items-center gap-3">
+      <AdminSearchInput v-model="search" placeholder="이름·아이디·이메일 검색" class="max-w-sm flex-1" />
+      <span class="ml-auto text-[12px] text-slate-500">
+        총 <span class="font-mono font-semibold text-slate-800">{{ total.toLocaleString() }}</span>명
+      </span>
     </div>
 
     <AdminDataTable
       :columns="COLUMNS"
       :rows="rows"
       :pending="pending"
-      :error="null"
+      :error="error"
       empty-text="표시할 계정이 없습니다."
     >
       <template #default="{ row }: { row: User }">
-        <tr class="hover:bg-slate-50" :class="row.isMock ? 'opacity-70' : ''">
+        <tr class="hover:bg-slate-50">
           <td class="px-5 py-3">
             <div class="flex items-center gap-2.5">
               <span
@@ -125,13 +156,13 @@ function fmtTime(iso?: string) {
               <div>
                 <p class="text-[13px] font-semibold text-slate-900">
                   {{ row.name || row.loginId }}
-                  <span v-if="row.isMock" class="ml-1 text-[10px] font-normal text-slate-400">(목업)</span>
+                  <span v-if="isMe(row)" class="ml-1 rounded bg-primary-50 px-1 text-[10px] font-medium text-primary-600">나</span>
                 </p>
-                <p class="text-[11px] text-slate-500">{{ row.email }}</p>
+                <p class="text-[11px] text-slate-500">{{ row.email || '—' }}</p>
               </div>
             </div>
           </td>
-          <td class="px-3 py-3 text-[12px] text-slate-700">{{ row.company }}</td>
+          <td class="px-3 py-3 text-[12px] text-slate-700">{{ row.company || '—' }}</td>
           <td class="px-3 py-3 text-center">
             <span
               class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -155,11 +186,37 @@ function fmtTime(iso?: string) {
       </template>
     </AdminDataTable>
 
+    <!-- 페이저 -->
+    <div v-if="!pending && !error && total > 0" class="mt-4 flex items-center justify-between">
+      <p class="text-[12px] text-slate-500">
+        <span class="font-mono text-slate-700">{{ rangeStart }}–{{ rangeEnd }}</span> / {{ total.toLocaleString() }}
+      </p>
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          :disabled="page <= 1"
+          class="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          @click="goPrev"
+        >
+          <ChevronLeft class="size-4" />
+        </button>
+        <span class="px-2 font-mono text-[12px] text-slate-600">{{ page }} / {{ totalPages }}</span>
+        <button
+          type="button"
+          :disabled="page >= totalPages"
+          class="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          @click="goNext"
+        >
+          <ChevronRight class="size-4" />
+        </button>
+      </div>
+    </div>
+
     <!-- 빈 상태 -->
     <AdminEmptyState
-      v-if="!pending && !rows.length"
+      v-if="!pending && !error && !rows.length"
       title="표시할 계정이 없습니다"
-      description="계정 목록 API 연동 후 채워집니다."
+      :description="search ? '검색 조건에 맞는 계정이 없습니다.' : '직원 계정이 없습니다.'"
       class="mt-4"
     >
       <template #icon><Users class="size-5 text-slate-400" /></template>
