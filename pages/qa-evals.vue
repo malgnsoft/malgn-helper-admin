@@ -70,7 +70,7 @@ async function load() {
     url.searchParams.set('limit', '50')
     url.searchParams.set('sort', sort.value)
     if (includeEmpty.value) url.searchParams.set('includeEmpty', '1')
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = (await res.json()) as { rows: EvalRow[]; total: number }
     rows.value = data.rows

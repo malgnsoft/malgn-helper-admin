@@ -41,7 +41,7 @@ const error = ref<string | null>(null)
 async function load() {
   pending.value = true
   try {
-    const res = await fetch(`${API_BASE}/admin/kpi`, { cache: 'no-store' })
+    const res = await fetch(`${API_BASE}/admin/kpi`, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = (await res.json()) as { kpi: Kpi; recent: RecentItem[] }
     kpi.value = data.kpi

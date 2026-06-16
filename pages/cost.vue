@@ -91,7 +91,7 @@ async function load() {
     const url = new URL(`${API_BASE}/admin/cost`)
     url.searchParams.set('days', String(days.value))
     url.searchParams.set('limit', '50')
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(`API ${res.status}`)
     data.value = (await res.json()) as CostResp
   } catch (e) {
