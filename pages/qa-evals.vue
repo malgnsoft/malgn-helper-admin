@@ -56,6 +56,11 @@ const total = ref(0)
 const pending = ref(true)
 const error = ref<string | null>(null)
 
+/* 서버 페이지네이션 (limit/offset). page = floor(offset/limit)+1 */
+const LIMIT = 50
+const offset = ref(0)
+const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
+
 const selectedPostId = ref<number | null>(null)
 const modalOpen = computed({
   get: () => selectedPostId.value !== null,
@@ -67,7 +72,8 @@ async function load() {
   error.value = null
   try {
     const url = new URL(`${API_BASE}/admin/evals`)
-    url.searchParams.set('limit', '50')
+    url.searchParams.set('limit', String(LIMIT))
+    url.searchParams.set('offset', String(offset.value))
     url.searchParams.set('sort', sort.value)
     if (includeEmpty.value) url.searchParams.set('includeEmpty', '1')
     const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
@@ -87,6 +93,7 @@ function applyFilter() {
   sort.value = draftSort.value
   includeEmpty.value = draftIncludeEmpty.value
   appliedQ.value = draftQ.value
+  offset.value = 0 // 필터/정렬 변경 시 첫 페이지로
   load()
 }
 function resetFilter() {
@@ -96,6 +103,11 @@ function resetFilter() {
   sort.value = 'recent'
   includeEmpty.value = false
   appliedQ.value = ''
+  offset.value = 0
+  load()
+}
+function goPage(p: number) {
+  offset.value = (p - 1) * LIMIT
   load()
 }
 const filteredRows = computed(() => {
@@ -168,6 +180,9 @@ function scoreClass(s: number | null) {
       :shown="filteredRows.length"
       empty-text="조건에 맞는 평가 결과 없음"
     >
+      <template #footer>
+        <AdminPagination :page="page" :page-size="LIMIT" :total="total" @update:page="goPage" />
+      </template>
       <template #default="{ row }: { row: EvalRow }">
         <tr
           class="cursor-pointer hover:bg-slate-50"

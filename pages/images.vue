@@ -39,6 +39,12 @@ const rows = ref<Img[]>([])
 const total = ref(0)
 const pending = ref(true)
 const error = ref<string | null>(null)
+
+/* 서버 페이지네이션 (limit/offset). page = floor(offset/limit)+1 */
+const LIMIT = 60
+const offset = ref(0)
+const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
+
 const selected = ref<Img | null>(null)
 const modalOpen = computed({
   get: () => selected.value !== null,
@@ -50,7 +56,8 @@ async function load() {
   error.value = null
   try {
     const url = new URL(`${API_BASE}/image-assets`)
-    url.searchParams.set('limit', '60')
+    url.searchParams.set('limit', String(LIMIT))
+    url.searchParams.set('offset', String(offset.value))
     if (search.value.trim()) url.searchParams.set('search', search.value.trim())
     if (sourceFilter.value) url.searchParams.set('source', sourceFilter.value)
     const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
@@ -69,6 +76,7 @@ onMounted(load)
 function applyFilter() {
   search.value = draftSearch.value
   sourceFilter.value = draftSource.value
+  offset.value = 0 // 필터/검색 변경 시 첫 페이지로
   load()
 }
 function resetFilter() {
@@ -76,6 +84,11 @@ function resetFilter() {
   draftSource.value = ''
   search.value = ''
   sourceFilter.value = ''
+  offset.value = 0
+  load()
+}
+function goPage(p: number) {
+  offset.value = (p - 1) * LIMIT
   load()
 }
 
@@ -193,6 +206,16 @@ function fmtTime(iso: string | null) {
         <ImageIcon class="size-5 text-slate-400" />
       </template>
     </AdminEmptyState>
+
+    <!-- 페이저 (그리드 레이아웃이라 DataTable footer 미사용) -->
+    <AdminPagination
+      v-if="!pending && !error && rows.length > 0"
+      :page="page"
+      :page-size="LIMIT"
+      :total="total"
+      class="mt-4"
+      @update:page="goPage"
+    />
 
     <!-- 상세 모달 -->
     <AdminModal v-model="modalOpen" size="lg">

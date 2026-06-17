@@ -3,7 +3,7 @@
   API: GET /accounts (검색 q · 페이징 page/pageSize, tb_user 직원 스코프 목록).
 -->
 <script setup lang="ts">
-import { UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { UserPlus, Users } from 'lucide-vue-next'
 import type { TableColumn } from '~/components/admin/DataTable.vue'
 
 useHead({ title: '계정 · 맑은도우미 Admin' })
@@ -52,10 +52,6 @@ const rows = ref<User[]>([])
 const pending = ref(true)
 const error = ref<string | null>(null)
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-const rangeStart = computed(() => (total.value === 0 ? 0 : (page.value - 1) * PAGE_SIZE + 1))
-const rangeEnd = computed(() => Math.min(page.value * PAGE_SIZE, total.value))
-
 async function load() {
   pending.value = true
   error.value = null
@@ -86,9 +82,6 @@ watch(search, () => {
   debounce = setTimeout(() => { page.value = 1; load() }, 400)
 })
 watch(page, load)
-
-function goPrev() { if (page.value > 1) page.value -= 1 }
-function goNext() { if (page.value < totalPages.value) page.value += 1 }
 
 function isMe(row: User) {
   const s = meSession.value
@@ -144,6 +137,9 @@ function fmtTime(iso: string | null) {
       :error="error"
       empty-text="표시할 계정이 없습니다."
     >
+      <template #footer>
+        <AdminPagination :page="page" :page-size="PAGE_SIZE" :total="total" @update:page="page = $event" />
+      </template>
       <template #default="{ row }: { row: User }">
         <tr class="hover:bg-slate-50">
           <td class="px-5 py-3">
@@ -185,32 +181,6 @@ function fmtTime(iso: string | null) {
         </tr>
       </template>
     </AdminDataTable>
-
-    <!-- 페이저 -->
-    <div v-if="!pending && !error && total > 0" class="mt-4 flex items-center justify-between">
-      <p class="text-[12px] text-slate-500">
-        <span class="font-mono text-slate-700">{{ rangeStart }}–{{ rangeEnd }}</span> / {{ total.toLocaleString() }}
-      </p>
-      <div class="flex items-center gap-1">
-        <button
-          type="button"
-          :disabled="page <= 1"
-          class="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          @click="goPrev"
-        >
-          <ChevronLeft class="size-4" />
-        </button>
-        <span class="px-2 font-mono text-[12px] text-slate-600">{{ page }} / {{ totalPages }}</span>
-        <button
-          type="button"
-          :disabled="page >= totalPages"
-          class="inline-flex size-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          @click="goNext"
-        >
-          <ChevronRight class="size-4" />
-        </button>
-      </div>
-    </div>
 
     <!-- 빈 상태 -->
     <AdminEmptyState

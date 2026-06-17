@@ -156,6 +156,11 @@ const total = ref(0)
 const pending = ref(true)
 const error = ref<string | null>(null)
 
+/* 서버 페이지네이션 (limit/offset). page = floor(offset/limit)+1 */
+const LIMIT = 60
+const offset = ref(0)
+const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
+
 const badges = useAdminBadges()
 
 async function load() {
@@ -163,7 +168,8 @@ async function load() {
   error.value = null
   try {
     const url = new URL(`${API_BASE}/standard-answers`)
-    url.searchParams.set('limit', '60')
+    url.searchParams.set('limit', String(LIMIT))
+    url.searchParams.set('offset', String(offset.value))
     if (applied.scope) url.searchParams.set('scope', applied.scope)
     if (applied.topicId) url.searchParams.set('topicId', applied.topicId)
     if (applied.serviceId) url.searchParams.set('serviceId', applied.serviceId)
@@ -216,11 +222,17 @@ function applyFilter() {
   applied.serviceId = draft.serviceId
   applied.approvalStatus = draft.approvalStatus
   applied.q = draft.q
+  offset.value = 0 // 필터/검색 변경 시 첫 페이지로
   load()
 }
 function resetFilter() {
   draft.scope = draft.topicId = draft.serviceId = draft.approvalStatus = draft.q = ''
   Object.assign(applied, { scope: '', topicId: '', serviceId: '', approvalStatus: '', q: '' })
+  offset.value = 0
+  load()
+}
+function goPage(p: number) {
+  offset.value = (p - 1) * LIMIT
   load()
 }
 
@@ -413,8 +425,8 @@ async function confirmDelete() {
     })
     if (!res.ok) throw new Error(`API ${res.status}`)
     delOpen.value = false
-    delTarget.value = null
     if (panelOpen.value && editing.value?.id === delTarget.value?.id) panelOpen.value = false
+    delTarget.value = null
     await load()
     await refreshPendingBadge()
   } catch { /* silent */ } finally {
@@ -494,6 +506,9 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
       :shown="rows.length"
       empty-text="조건에 맞는 표준답변이 없습니다."
     >
+      <template #footer>
+        <AdminPagination :page="page" :page-size="LIMIT" :total="total" @update:page="goPage" />
+      </template>
       <template #default="{ row }: { row: SARow }">
         <tr class="cursor-pointer hover:bg-slate-50" @click="openEdit(row)">
           <td class="px-5 pr-3 py-3 font-mono text-[11px] text-slate-400">#{{ row.id }}</td>

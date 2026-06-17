@@ -52,6 +52,18 @@ const errorOnly   = ref(false)
 const rows        = ref<LogRow[]>([])
 const pending     = ref(true)
 const error       = ref<string | null>(null)
+
+/*
+  클라이언트 사이드 페이지네이션 (임시).
+  /admin/cost 는 top-N recent 배열만 주고 서버 total/offset 이 없으므로,
+  이미 로드된 rows 를 프론트에서 페이지 단위로 슬라이스한다.
+  → 전용 GET /admin/logs(서버 페이지네이션) 신설 시 limit/offset 방식으로 전환할 것.
+*/
+const CLIENT_PAGE_SIZE = 20
+const page = ref(1)
+const pagedRows = computed(() =>
+  rows.value.slice((page.value - 1) * CLIENT_PAGE_SIZE, page.value * CLIENT_PAGE_SIZE),
+)
 const selected    = ref<LogRow | null>(null)
 const detailOpen  = computed({
   get: () => !!selected.value,
@@ -73,6 +85,8 @@ async function load() {
     if (entityType.value) list = list.filter(r => r.entityType === entityType.value)
     if (errorOnly.value)  list = list.filter(r => !!r.error)
     rows.value = list
+    page.value = 1 // 재조회/필터 변경 시 첫 페이지로
+
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -137,12 +151,16 @@ function totalTokens(r: LogRow) {
 
     <AdminDataTable
       :columns="COLUMNS"
-      :rows="rows"
+      :rows="pagedRows"
       :pending="pending"
       :error="error"
-      :shown="rows.length"
+      :shown="pagedRows.length"
       empty-text="기록된 LLM 호출이 없습니다."
     >
+      <template #footer>
+        <!-- 임시: 서버 total 미제공으로 로드된 rows 기준 클라이언트 페이지네이션 -->
+        <AdminPagination :page="page" :page-size="CLIENT_PAGE_SIZE" :total="rows.length" @update:page="page = $event" />
+      </template>
       <template #default="{ row }: { row: LogRow }">
         <tr
           class="cursor-pointer hover:bg-slate-50"

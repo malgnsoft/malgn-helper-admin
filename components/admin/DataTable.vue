@@ -24,6 +24,11 @@
       <template #headerRight>
         <AdminSegment v-model="sort" :options="SORT_OPTS" />
       </template>
+
+      // 카드 하단 푸터 (페이저 등) — 슬롯 있을 때만 렌더
+      <template #footer>
+        <AdminPagination :page="page" :page-size="LIMIT" :total="total" @update:page="onPage" />
+      </template>
     </AdminDataTable>
 -->
 <script setup lang="ts">
@@ -128,5 +133,13 @@ defineProps<{
         </tbody>
       </table>
     </div>
+
+    <!-- ── 푸터 (페이저 등) ── 비파괴 추가: 슬롯 있을 때만 렌더 -->
+    <footer
+      v-if="!pending && !error && $slots.footer"
+      class="border-t border-slate-100 px-5 py-3"
+    >
+      <slot name="footer" />
+    </footer>
   </section>
 </template>
