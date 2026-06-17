@@ -1,50 +1,53 @@
 <!--
-  pages/bots/[id].vue — 봇 설정(생성/편집 겸용).
-  /bots/new = 새 봇, /bots/:id = 기존 봇 편집. 저장은 use-bots(localStorage 데모)로 실제 반영.
-  섹션: 기본정보 · 캐릭터(페르소나) · 답변범위 · 학습소스 · 모델 파라미터.
+  pages/bots/[id].vue — 봇 설정(생성/편집 겸용). 서비스별 "구분 설정"이 핵심.
+  /bots/new = 새 봇(POST), /bots/:id = 기존 봇(GET 로드 → PATCH 저장). 삭제는 DELETE.
+  섹션: 구분·기본정보 · 캐릭터(페르소나) · 답변범위 · 자료 연결(준비중) · 모델 파라미터.
+  쓰기는 서버가 admin(level≥9) 강제 → 권한 없으면 403 처리.
 -->
 <script setup lang="ts">
-import {
-  ArrowLeft,
-  Trash2,
-  Save,
-  FileText,
-  Link as LinkIcon,
-  Type as TypeIcon,
-  MessagesSquare,
-  RefreshCw,
-} from "lucide-vue-next";
+import { ArrowLeft, Trash2, Save } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
-const { get, upsert, remove, blankBot, ensureHydrated } = useBots();
-const { materials, ensureHydrated: ensureMaterials, byIds } = useMaterials();
+const { getOne, save, remove, blankBot } = useBots();
+const { services: serviceOpts, load: loadServices } = useServiceOptions();
 
-const TYPE_ICON: Record<MaterialType, unknown> = {
-  file: FileText,
-  url: LinkIcon,
-  text: TypeIcon,
-  qa: MessagesSquare,
-};
+const me = useAuthUser();
+const isAdmin = computed(() => (me.value?.level ?? 0) >= 9);
 
 const routeId = route.params.id as string;
 const isNew = computed(() => routeId === "new");
 
 const ready = ref(false);
 const notFound = ref(false);
+const loadErr = ref<string | null>(null);
 const form = reactive<Bot>(blankBot());
 
-onMounted(() => {
-  ensureHydrated();
-  ensureMaterials();
+// 서비스 드롭다운 바인딩: "" = 공통(serviceId null), 그 외 = String(serviceId)
+const serviceSel = computed<string>({
+  get: () => (form.serviceId === null ? "" : String(form.serviceId)),
+  set: (v: string) => {
+    form.serviceId = v === "" ? null : Number(v);
+  },
+});
+
+onMounted(async () => {
+  await loadServices();
   if (isNew.value) {
     Object.assign(form, blankBot());
-  } else {
-    const existing = get(routeId);
-    if (!existing) notFound.value = true;
-    else Object.assign(form, JSON.parse(JSON.stringify(existing)));
+    ready.value = true;
+    return;
   }
-  ready.value = true;
+  try {
+    const existing = await getOne(routeId);
+    Object.assign(form, existing);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg.includes("찾을 수 없")) notFound.value = true;
+    else loadErr.value = msg;
+  } finally {
+    ready.value = true;
+  }
 });
 
 useHead(() => ({
@@ -57,22 +60,6 @@ function toggle(arr: string[], val: string) {
   if (i >= 0) arr.splice(i, 1);
   else arr.push(val);
 }
-
-// ── 학습 소스 피커 (자료 라이브러리에서 선택) ──
-const materialSearch = ref("");
-const pickerMaterials = computed(() => {
-  const q = materialSearch.value.trim().toLowerCase();
-  if (!q) return materials.value;
-  return materials.value.filter(
-    (m) => m.name.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q)),
-  );
-});
-const selectedMaterials = computed(() => byIds(form.materialSetIds));
-const selectedStats = computed(() => ({
-  count: selectedMaterials.value.length,
-  chunks: selectedMaterials.value.reduce((a, m) => a + m.chunks, 0),
-  processing: selectedMaterials.value.filter((m) => m.status === "processing").length,
-}));
 
 // ── 콤마 구분 태그 프록시 ──
 const topicsText = computed({
@@ -96,22 +83,43 @@ const STATUS_OPTS = [
 
 const nameError = ref(false);
 const saving = ref(false);
+const saveErr = ref<string | null>(null);
 
-function save() {
+async function doSave() {
+  if (!isAdmin.value) {
+    saveErr.value = "admin 권한이 필요합니다.";
+    return;
+  }
   if (!form.name.trim()) {
     nameError.value = true;
     return;
   }
   saving.value = true;
-  upsert(JSON.parse(JSON.stringify(toRaw(form))));
-  // 살짝의 피드백 후 목록으로
-  setTimeout(() => router.push("/bots"), 150);
+  saveErr.value = null;
+  try {
+    await save(toRaw(form));
+    router.push("/bots");
+  } catch (e) {
+    saveErr.value = (e as Error).message;
+  } finally {
+    saving.value = false;
+  }
 }
 
 const confirmDelete = ref(false);
-function doDelete() {
-  remove(routeId);
-  router.push("/bots");
+const deleting = ref(false);
+async function doDelete() {
+  deleting.value = true;
+  saveErr.value = null;
+  try {
+    await remove(routeId);
+    router.push("/bots");
+  } catch (e) {
+    saveErr.value = (e as Error).message;
+    confirmDelete.value = false;
+  } finally {
+    deleting.value = false;
+  }
 }
 
 const inputCls =
@@ -142,16 +150,19 @@ function chipCls(on: boolean) {
         <button
           v-if="!isNew"
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50"
+          :disabled="!isAdmin"
+          :title="isAdmin ? '삭제' : 'admin 권한 필요'"
+          class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
           @click="confirmDelete = true"
         >
           <Trash2 class="size-4" />삭제
         </button>
         <button
           type="button"
-          :disabled="saving"
+          :disabled="saving || !isAdmin"
+          :title="isAdmin ? '' : 'admin 권한 필요'"
           class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-60"
-          @click="save"
+          @click="doSave"
         >
           <Save class="size-4" />{{ saving ? "저장 중…" : "저장" }}
         </button>
@@ -173,6 +184,14 @@ function chipCls(on: boolean) {
       </template>
     </AdminEmptyState>
 
+    <!-- 로드 오류 -->
+    <div
+      v-else-if="ready && loadErr"
+      class="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700"
+    >
+      봇을 불러오지 못했습니다 — {{ loadErr }}
+    </div>
+
     <template v-else-if="ready">
       <!-- 헤더(아이덴티티) -->
       <header class="mb-6 flex items-center gap-4">
@@ -191,9 +210,22 @@ function chipCls(on: boolean) {
         </div>
       </header>
 
+      <div v-if="!isAdmin" class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
+        조회 전용입니다. 봇 생성·편집·삭제는 admin 권한이 필요합니다.
+      </div>
+
       <div class="space-y-6">
-        <!-- 1. 기본 정보 -->
-        <AdminSettingsSection title="기본 정보">
+        <!-- 1. 구분 · 기본 정보 -->
+        <AdminSettingsSection
+          title="구분 · 기본 정보"
+          description="이 봇이 어떤 서비스(솔루션)에 속하는지 지정합니다. 공통은 전 서비스 대상입니다."
+        >
+          <AdminFormRow label="서비스 구분" required hint="봇 1개 = 서비스 1개. 공통은 전 서비스">
+            <select v-model="serviceSel" :class="selectCls">
+              <option value="">공통(전 서비스)</option>
+              <option v-for="s in serviceOpts" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+            </select>
+          </AdminFormRow>
           <AdminFormRow label="봇 이름" required>
             <input
               v-model="form.name"
@@ -261,19 +293,6 @@ function chipCls(on: boolean) {
           title="답변 범위"
           description="이 봇이 어디까지 답하고, 모르면 어떻게 처리할지 정합니다."
         >
-          <AdminFormRow label="담당 서비스" hint="이 봇이 응대할 솔루션 범위">
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="s in SERVICE_OPTS"
-                :key="s.value"
-                type="button"
-                :class="chipCls(form.services.includes(s.value))"
-                @click="toggle(form.services, s.value)"
-              >
-                {{ s.label }}
-              </button>
-            </div>
-          </AdminFormRow>
           <AdminFormRow label="토픽" hint="콤마(,)로 구분">
             <input v-model="topicsText" :class="inputCls" placeholder="로그인, 수강신청, 진도" />
           </AdminFormRow>
@@ -313,68 +332,11 @@ function chipCls(on: boolean) {
           </AdminFormRow>
         </AdminSettingsSection>
 
-        <!-- 4. 학습 소스 -->
+        <!-- 4. 표준답변 / 자료 연결 -->
         <AdminSettingsSection
-          title="학습 소스"
-          description="봇이 근거로 삼을 자료셋과 표준답변을 지정합니다. (인덱싱 연동은 API 보강 예정)"
+          title="답변 소스"
+          description="봇이 근거로 삼을 표준답변·자료를 지정합니다."
         >
-          <AdminFormRow label="학습 자료" hint="라이브러리에서 이 봇이 학습할 소스를 고릅니다">
-            <div>
-              <!-- 선택 요약 + 관리 링크 -->
-              <div class="mb-2 flex flex-wrap items-center gap-2">
-                <span class="text-[12px] text-slate-500">
-                  선택 <span class="font-mono font-semibold text-primary-700">{{ selectedStats.count }}</span>개 · 청크 합계
-                  <span class="font-mono font-semibold text-slate-700">{{ selectedStats.chunks.toLocaleString() }}</span>
-                  <span v-if="selectedStats.processing" class="text-blue-600"> · 처리중 {{ selectedStats.processing }}</span>
-                </span>
-                <NuxtLink to="/materials" class="ml-auto text-[12px] font-medium text-primary-600 hover:underline">
-                  자료 추가·관리 →
-                </NuxtLink>
-              </div>
-              <input v-model="materialSearch" :class="inputCls + ' mb-2'" placeholder="자료명·태그로 검색" />
-              <!-- 소스 목록 -->
-              <div
-                v-if="pickerMaterials.length"
-                class="max-h-80 space-y-1 overflow-auto rounded-lg border border-slate-200 p-2"
-              >
-                <label
-                  v-for="m in pickerMaterials"
-                  :key="m.id"
-                  class="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition"
-                  :class="form.materialSetIds.includes(m.id) ? 'border-primary-300 bg-primary-50/50' : 'border-transparent hover:bg-slate-50'"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="form.materialSetIds.includes(m.id)"
-                    class="mt-0.5 size-4 accent-primary-600"
-                    @change="toggle(form.materialSetIds, m.id)"
-                  />
-                  <span class="flex size-7 shrink-0 items-center justify-center rounded-md" :class="MATERIAL_TYPE_META[m.type].cls">
-                    <component :is="TYPE_ICON[m.type]" class="size-3.5" />
-                  </span>
-                  <span class="min-w-0 flex-1">
-                    <span class="flex items-center gap-1.5">
-                      <span class="truncate text-[13px] font-medium text-slate-800">{{ m.name }}</span>
-                      <span
-                        class="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ring-1 ring-inset"
-                        :class="MATERIAL_STATUS_META[m.status].cls"
-                      >
-                        <RefreshCw v-if="m.status === 'processing'" class="size-2 animate-spin" />{{ MATERIAL_STATUS_META[m.status].label }}
-                      </span>
-                    </span>
-                    <span class="mt-0.5 block truncate text-[11px] text-slate-400">
-                      {{ MATERIAL_TYPE_META[m.type].label }} ·
-                      {{ m.status === "indexed" ? `청크 ${m.chunks}` : m.format }} · {{ m.summary }}
-                    </span>
-                  </span>
-                </label>
-              </div>
-              <p v-else class="rounded-lg border border-dashed border-slate-200 p-4 text-center text-[12px] text-slate-400">
-                자료가 없습니다.
-                <NuxtLink to="/materials" class="text-primary-600 hover:underline">자료 라이브러리</NuxtLink>에서 먼저 추가하세요.
-              </p>
-            </div>
-          </AdminFormRow>
           <AdminFormRow label="표준답변 우선 사용">
             <div class="space-y-2">
               <label class="inline-flex cursor-pointer items-center gap-2">
@@ -386,8 +348,11 @@ function chipCls(on: boolean) {
               </div>
             </div>
           </AdminFormRow>
-          <AdminFormRow label="제외 규칙" hint="인용·노출하면 안 되는 것">
-            <textarea v-model="form.excludeRules" rows="2" :class="taCls" placeholder="비공개 댓글 본문, 내부 운영 메모는 인용 금지" />
+          <AdminFormRow label="학습 자료 연결" hint="자료 라이브러리 API 도입 후 제공">
+            <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-[12px] text-slate-500">
+              <span class="font-medium text-slate-600">준비중</span> — 봇별 학습 자료(소스) 연결은 자료 라이브러리 백엔드 도입 후 제공됩니다.
+              현재는 표준답변 사용 설정만 반영됩니다.
+            </div>
           </AdminFormRow>
         </AdminSettingsSection>
 
@@ -406,6 +371,9 @@ function chipCls(on: boolean) {
           </AdminFormRow>
         </AdminSettingsSection>
 
+        <!-- 저장 오류 -->
+        <div v-if="saveErr" class="rounded-md bg-rose-50 px-3 py-2 text-[12px] text-rose-700">{{ saveErr }}</div>
+
         <!-- 하단 저장 -->
         <div class="flex items-center justify-end gap-2 pb-2">
           <NuxtLink
@@ -415,9 +383,10 @@ function chipCls(on: boolean) {
           >
           <button
             type="button"
-            :disabled="saving"
+            :disabled="saving || !isAdmin"
+            :title="isAdmin ? '' : 'admin 권한 필요'"
             class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-60"
-            @click="save"
+            @click="doSave"
           >
             <Save class="size-4" />{{ saving ? "저장 중…" : isNew ? "봇 만들기" : "변경 저장" }}
           </button>
@@ -447,10 +416,11 @@ function chipCls(on: boolean) {
           </button>
           <button
             type="button"
-            class="rounded-md bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-rose-700"
+            :disabled="deleting"
+            class="rounded-md bg-rose-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
             @click="doDelete"
           >
-            삭제
+            {{ deleting ? "삭제 중…" : "삭제" }}
           </button>
         </div>
       </template>
