@@ -95,10 +95,10 @@ export function useAdminBadges() {
   return useState<Record<string, { value: number | string; color: "primary" | "warning" | "error" | "neutral" }>>(
     "admin-badges",
     () => ({
-      // 데모 값 — 추후 GET /admin/badges로 폴링
+      // 데모 값(Phase 2 챗봇 데이터 의존) — 추후 GET /admin/badges로 폴링
       uncovered: { value: 12, color: "error" },
       escalations: { value: 3, color: "warning" },
-      "standard-answers": { value: 4, color: "warning" },
+      // standard-answers 배지는 실데이터 — standard-answers.vue 가 승인 대기(draft+reviewing) 카운트로 갱신.
     }),
   );
 }
