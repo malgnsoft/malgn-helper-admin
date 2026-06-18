@@ -107,7 +107,9 @@ const APPROVAL_FILTER_OPTS = [
 const COLUMNS: TableColumn[] = [
   { key: 'id',        label: '#',      class: 'px-5 pr-3 w-14' },
   { key: 'label',     label: '라벨' },
-  { key: 'class',     label: '분류',   class: 'px-3 w-44' },
+  { key: 'scope',     label: '분류',   align: 'center', class: 'px-3 w-16' },
+  { key: 'topic',     label: '토픽',   class: 'px-3 w-32' },
+  { key: 'service',   label: '서비스', class: 'px-3 w-32' },
   { key: 'status',    label: '상태',   align: 'center', class: 'px-3 w-20' },
   { key: 'usage',     label: '사용',   align: 'right' },
   { key: 'updatedAt', label: '수정일', align: 'right' },
@@ -315,6 +317,10 @@ async function save() {
           label: form.label.trim(),
           question: form.question.trim(),
           answer: form.answer.trim(),
+          ...(form.scope === 'common' || form.scope === 'service' ? { scope: form.scope } : {}),
+          topicId: form.topicId ? Number(form.topicId) : null,
+          serviceId: form.serviceId ? Number(form.serviceId) : null,
+          tags: parseTags(),
         }),
       })
       if (res.status === 403) throw new Error('수정은 admin 권한이 필요합니다.')
@@ -463,11 +469,11 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
 
     <!-- 필터 -->
     <AdminFilterBar @search="applyFilter" @reset="resetFilter">
-      <AdminFilterField label="scope">
+      <AdminFilterField label="분류">
         <select v-model="draft.scope" :class="selectCls">
           <option value="">전체</option>
-          <option value="common">common</option>
-          <option value="service">service</option>
+          <option value="common">공통</option>
+          <option value="service">서비스</option>
         </select>
       </AdminFilterField>
       <AdminFilterField label="토픽">
@@ -516,23 +522,21 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
             <p class="text-[13px] font-semibold text-slate-900">{{ row.label }}</p>
             <p class="mt-0.5 line-clamp-1 max-w-md text-[11.5px] text-slate-500">{{ row.question }}</p>
           </td>
+          <td class="px-3 py-3 text-center">
+            <span
+              v-if="row.scope"
+              class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              :class="SCOPE_CLS[row.scope]"
+            >{{ row.scope === 'common' ? '공통' : '서비스' }}</span>
+            <span v-else class="text-[11px] text-slate-300">—</span>
+          </td>
           <td class="px-3 py-3">
-            <div class="flex flex-wrap items-center gap-1">
-              <span
-                v-if="row.scope"
-                class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                :class="SCOPE_CLS[row.scope]"
-              >{{ row.scope }}</span>
-              <span
-                v-if="row.topic_label"
-                class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-              >{{ row.topic_label }}</span>
-              <span
-                v-if="row.service_name"
-                class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-              >{{ row.service_name }}</span>
-              <span v-if="!row.scope && !row.topic_label && !row.service_name" class="text-[11px] text-slate-300">미분류</span>
-            </div>
+            <span v-if="row.topic_label" class="text-[12px] text-slate-700">{{ row.topic_label }}</span>
+            <span v-else class="text-[11px] text-slate-300">—</span>
+          </td>
+          <td class="px-3 py-3">
+            <span v-if="row.service_name" class="text-[12px] text-slate-700">{{ row.service_name }}</span>
+            <span v-else class="text-[11px] text-slate-300">—</span>
           </td>
           <td class="px-3 py-3 text-center">
             <span
@@ -685,23 +689,23 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           <p class="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">분류</p>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="mb-1.5 block text-[12px] font-medium text-slate-700">scope</label>
-              <select v-model="form.scope" :disabled="!canWrite || !!editing" :class="selectCls">
+              <label class="mb-1.5 block text-[12px] font-medium text-slate-700">분류 <span class="text-amber-600">*</span></label>
+              <select v-model="form.scope" :disabled="!canWrite" :class="selectCls">
                 <option value="">미지정</option>
-                <option value="common">common</option>
-                <option value="service">service</option>
+                <option value="common">공통</option>
+                <option value="service">서비스</option>
               </select>
             </div>
             <div>
               <label class="mb-1.5 block text-[12px] font-medium text-slate-700">서비스</label>
-              <select v-model="form.serviceId" :disabled="!canWrite || !!editing || form.scope === 'common'" :class="selectCls">
+              <select v-model="form.serviceId" :disabled="!canWrite || form.scope === 'common'" :class="selectCls">
                 <option value="">미지정</option>
                 <option v-for="s in services" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
               </select>
             </div>
             <div class="col-span-2">
               <label class="mb-1.5 block text-[12px] font-medium text-slate-700">토픽</label>
-              <select v-model="form.topicId" :disabled="!canWrite || !!editing" :class="selectCls">
+              <select v-model="form.topicId" :disabled="!canWrite" :class="selectCls">
                 <option value="">미지정</option>
                 <option v-for="t in formTopicOpts" :key="t.id" :value="String(t.id)">{{ t.label }} ({{ t.scope }})</option>
               </select>
@@ -712,19 +716,14 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
                 v-model="form.tagsText"
                 type="text"
                 placeholder="e.g. 환불, 자동결제"
-                :disabled="!canWrite || !!editing"
+                :disabled="!canWrite"
                 :class="selectCls"
               />
             </div>
           </div>
-          <p v-if="editing" class="mt-2 text-[11px] text-slate-400">
-            분류·태그는 신규 저장 시에만 지정합니다. 기존 항목의 분류 변경은 카탈로그 정책상 별도 처리됩니다.
+          <p class="mt-2 text-[11px] text-slate-400">
+            분류·태그를 수정하면 [{{ editing ? '본문 저장' : '추가' }}] 시 함께 반영됩니다.
           </p>
-          <!-- 편집 시 현 분류/태그 표시 -->
-          <div v-if="editing" class="mt-2 flex flex-wrap items-center gap-1">
-            <span v-for="(tag, i) in editing.tags" :key="i" class="rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-600 ring-1 ring-slate-200">#{{ tag }}</span>
-            <span v-if="!editing.tags.length" class="text-[11px] text-slate-300">태그 없음</span>
-          </div>
         </div>
 
         <!-- 승인 전이 (편집 시) -->
