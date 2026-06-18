@@ -15,6 +15,8 @@ defineProps<{
   caption?: string
   title: string
   description?: string
+  /** 아직 실데이터 연동 전인 목업 페이지에 '목업' 배지 표시 */
+  mock?: boolean
 }>()
 </script>
 
@@ -28,9 +30,18 @@ defineProps<{
         >
           {{ caption }}
         </p>
-        <h1 class="mt-1 text-[22px] font-bold tracking-tight text-slate-900">
-          {{ title }}
-        </h1>
+        <div class="mt-1 flex items-center gap-2">
+          <h1 class="text-[22px] font-bold tracking-tight text-slate-900">
+            {{ title }}
+          </h1>
+          <span
+            v-if="mock"
+            class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200"
+            title="아직 실데이터 연동 전인 목업 화면입니다"
+          >
+            <span class="size-1.5 rounded-full bg-amber-500" />목업
+          </span>
+        </div>
         <p v-if="description" class="mt-1.5 text-[13px] text-slate-500">
           {{ description }}
         </p>

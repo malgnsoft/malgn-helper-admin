@@ -73,7 +73,7 @@ function confClass(c: number) {
 
 <template>
   <div>
-    <AdminPageHeader
+    <AdminPageHeader mock
       caption="운영 보드"
       title="챗봇 로그"
       description="사용자 챗 세션의 메시지 흐름·인용 출처·신뢰도·피드백을 열람합니다."

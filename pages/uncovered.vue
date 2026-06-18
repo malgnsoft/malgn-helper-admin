@@ -79,7 +79,7 @@ function fmtTime(iso: string) {
 
 <template>
   <div>
-    <AdminPageHeader
+    <AdminPageHeader mock
       caption="운영 보드"
       title="미커버 질문"
       description="챗봇이 답하지 못한 질문을 수집·분류해 지식 보강 큐로 운영합니다."

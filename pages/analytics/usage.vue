@@ -39,7 +39,7 @@ const maxMsgs     = computed(() => Math.max(...DAILY_DATA.map(d => d.msgs)))
 
 <template>
   <div>
-    <AdminPageHeader
+    <AdminPageHeader mock
       caption="분석·비용"
       title="사용량"
       description="일별·프로젝트별 세션 수와 메시지 건수를 모니터링합니다."

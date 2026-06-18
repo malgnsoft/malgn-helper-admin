@@ -77,7 +77,7 @@ function confClass(c: number) {
 
 <template>
   <div>
-    <AdminPageHeader
+    <AdminPageHeader mock
       caption="운영 보드"
       title="에스컬레이션"
       description="챗봇 저신뢰·모름 분기 질문을 상담사가 처리하는 큐입니다."
