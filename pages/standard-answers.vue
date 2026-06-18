@@ -442,6 +442,20 @@ async function confirmDelete() {
 
 /* ── 포맷 ── */
 function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
+
+/* 목록 미리보기용 — HTML 태그·엔티티 제거하고 평문으로 (질문/답변에 HTML이 섞여도 태그가 안 보이게) */
+function stripHtml(s?: string | null): string {
+  return (s ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#3?9;|&apos;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 </script>
 
 <template>
@@ -520,7 +534,7 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           <td class="px-5 pr-3 py-3 font-mono text-[11px] text-slate-400">#{{ row.id }}</td>
           <td class="px-3 py-3">
             <p class="text-[13px] font-semibold text-slate-900">{{ row.label }}</p>
-            <p class="mt-0.5 line-clamp-1 max-w-md text-[11.5px] text-slate-500">{{ row.question }}</p>
+            <p class="mt-0.5 line-clamp-1 max-w-md text-[11.5px] text-slate-500">{{ stripHtml(row.question) }}</p>
           </td>
           <td class="px-3 py-3 text-center">
             <span
