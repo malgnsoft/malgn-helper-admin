@@ -1,6 +1,6 @@
 <!--
   components/admin/SidebarMenu.vue
-  LNB(좌측 사이드바) — 5 그룹 × 17 메뉴.
+  LNB(좌측 사이드바) — 5 그룹 메뉴.
   handoff_noti_admin 디자인 톤 (256px wide, 흰 배경, 그룹 헤더 + 자식 들여쓰기).
 -->
 <script setup lang="ts">
@@ -25,6 +25,7 @@ import {
   ClipboardList,
   Code2,
   Bot,
+  Megaphone,
   Search,
   ChevronDown,
   MessageSquareDot,
@@ -51,6 +52,7 @@ const ICONS: Record<string, any> = {
   "clipboard-list": ClipboardList,
   "code-2": Code2,
   bot: Bot,
+  megaphone: Megaphone,
 };
 
 const route = useRoute();

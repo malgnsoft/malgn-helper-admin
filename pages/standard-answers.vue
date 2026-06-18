@@ -14,7 +14,7 @@
 import { Plus, Pencil, Trash2, Bookmark, AlertTriangle, CheckCircle2 } from 'lucide-vue-next'
 import type { TableColumn } from '~/components/admin/DataTable.vue'
 
-useHead({ title: '표준답변 · 맑은도우미 Admin' })
+useHead({ title: 'Q&A 표준답변 · 맑은도우미 Admin' })
 
 const API_BASE = 'https://malgn-helper-api.malgnsoft.workers.dev'
 
@@ -448,8 +448,8 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
   <div>
     <AdminPageHeader
       caption="지식 자산"
-      title="표준답변"
-      description="챗봇 응답 1순위 소스. 분류·승인 워크플로로 검증된 답변만 챗봇에 노출됩니다."
+      title="Q&A 표준답변"
+      description="고객 문의(Q&A) 기반의 검증된 답변. 직원 안내글은 별도 [안내글] 메뉴에서 관리합니다. 분류·승인 워크플로로 검증된 답변만 챗봇에 노출됩니다."
     >
       <template #actions>
         <button

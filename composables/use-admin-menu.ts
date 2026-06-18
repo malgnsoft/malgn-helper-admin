@@ -37,7 +37,10 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: "지식 자산",
     items: [
       { key: "bots", label: "봇 관리", path: "/bots", icon: "bot", roles: ["admin", "developer"] },
-      { key: "standard-answers", label: "표준답변", path: "/standard-answers", icon: "bookmark" },
+      { key: "standard-answers", label: "Q&A 표준답변", path: "/standard-answers", icon: "bookmark" },
+      // 안내글(표준 안내답변): staff 첫 작성 안내글 트랙. Q&A 표준답변과 별도 테이블(hp_announce, dba 설계 중)로 분리 예정.
+      // 백엔드 GET /announces 미구현 → 현재는 메뉴·페이지 구조 + 준비 상태. developer↑ 가시.
+      { key: "announces", label: "안내글", path: "/announces", icon: "megaphone", roles: ["admin", "developer"] },
       { key: "materials", label: "학습 자료", path: "/materials", icon: "file-text" },
       { key: "images", label: "이미지 카탈로그", path: "/images", icon: "image" },
       { key: "catalog", label: "토픽·서비스", path: "/catalog", icon: "tag", roles: ["admin", "developer"] },
