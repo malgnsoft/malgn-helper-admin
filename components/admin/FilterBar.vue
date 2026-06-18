@@ -1,10 +1,10 @@
 <!--
   components/admin/FilterBar.vue
-  목록 상단 필터(검색) 바 — 라벨형 필드들 + 우측 초기화 / 조회 버튼.
+  목록 상단 필터(검색) 바 — 라벨형 필드들 + 우측 조회 버튼.
   필드는 <AdminFilterField>로 슬롯에 배치한다.
 
   Usage:
-    <AdminFilterBar @search="apply" @reset="reset">
+    <AdminFilterBar @search="apply">
       <AdminFilterField label="상태">
         <select v-model="draft.status" class="...">...</select>
       </AdminFilterField>
@@ -14,21 +14,18 @@
     </AdminFilterBar>
 -->
 <script setup lang="ts">
-import { RotateCcw, Search } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 
 withDefaults(
   defineProps<{
     /** 조회 버튼 라벨 */
     searchLabel?: string
-    /** 초기화 버튼 라벨 */
-    resetLabel?: string
   }>(),
-  { searchLabel: '조회', resetLabel: '초기화' },
+  { searchLabel: '조회' },
 )
 
 defineEmits<{
   search: []
-  reset: []
 }>()
 </script>
 
@@ -40,13 +37,6 @@ defineEmits<{
 
       <!-- 우측 버튼 -->
       <div class="ml-auto flex items-center gap-1.5 self-end pb-0.5">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-medium text-primary-600 transition hover:bg-primary-50"
-          @click="$emit('reset')"
-        >
-          <RotateCcw class="size-3.5" />{{ resetLabel }}
-        </button>
         <button
           type="button"
           class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-primary-700"
