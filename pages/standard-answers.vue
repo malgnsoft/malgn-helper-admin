@@ -675,15 +675,14 @@ function stripHtml(s?: string | null): string {
           />
         </div>
 
-        <!-- 질문 -->
+        <!-- 질문 (위지위그 / TinyMCE) -->
         <div>
           <label class="mb-1.5 block text-[12px] font-medium text-slate-700">질문 <span class="text-amber-600">*</span></label>
-          <textarea
+          <AdminRichEditor
             v-model="form.question"
-            rows="2"
-            placeholder="대표 질문 문장"
             :disabled="!canWrite"
-            class="w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+            :height="200"
+            placeholder="대표 질문 문장"
           />
         </div>
 
