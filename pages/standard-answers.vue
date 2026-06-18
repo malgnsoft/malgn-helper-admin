@@ -442,20 +442,6 @@ async function confirmDelete() {
 
 /* ── 포맷 ── */
 function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
-
-/* 목록 미리보기용 — HTML 태그·엔티티 제거하고 평문으로 (질문/답변에 HTML이 섞여도 태그가 안 보이게) */
-function stripHtml(s?: string | null): string {
-  return (s ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#3?9;|&apos;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 </script>
 
 <template>
@@ -534,7 +520,7 @@ function stripHtml(s?: string | null): string {
           <td class="px-5 pr-3 py-3 font-mono text-[11px] text-slate-400">#{{ row.id }}</td>
           <td class="px-3 py-3">
             <p class="text-[13px] font-semibold text-slate-900">{{ row.label }}</p>
-            <p class="mt-0.5 line-clamp-1 max-w-md text-[11.5px] text-slate-500">{{ stripHtml(row.question) }}</p>
+            <div class="qa-preview mt-0.5 max-w-xl text-[11.5px] leading-relaxed text-slate-500" v-html="row.question" />
           </td>
           <td class="px-3 py-3 text-center">
             <span
@@ -842,3 +828,16 @@ function stripHtml(s?: string | null): string {
     </AdminModal>
   </div>
 </template>
+
+<style scoped>
+/* 목록 질문 미리보기 — 태그를 제거하지 않고 서식(줄바꿈)을 렌더. 높이만 제한, 이미지는 숨김. */
+.qa-preview {
+  max-height: 4em;
+  overflow: hidden;
+}
+.qa-preview :deep(p) { margin: 0; }
+.qa-preview :deep(ul),
+.qa-preview :deep(ol) { margin: 0; padding-left: 1.1em; }
+.qa-preview :deep(img) { display: none; }
+.qa-preview :deep(*) { font-size: inherit !important; font-weight: inherit; color: inherit; }
+</style>
