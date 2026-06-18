@@ -590,11 +590,11 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
       </template>
     </AdminEmptyState>
 
-    <!-- 상세·편집 슬라이드오버 -->
-    <AdminSlideOver
+    <!-- 상세·편집 모달 (가운데, 넓게) -->
+    <AdminModal
       v-model="panelOpen"
       :title="editing ? '표준답변 상세·편집' : '새 표준답변'"
-      size="xl"
+      size="2xl"
     >
       <div class="space-y-5">
         <!-- 현재 상태 (편집 시) -->
@@ -669,15 +669,14 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           />
         </div>
 
-        <!-- 답변 -->
+        <!-- 답변 (위지위그 / TinyMCE) -->
         <div>
           <label class="mb-1.5 block text-[12px] font-medium text-slate-700">답변 <span class="text-amber-600">*</span></label>
-          <textarea
+          <AdminRichEditor
             v-model="form.answer"
-            rows="5"
-            placeholder="표준 답변 내용 (마크다운 사용 가능)"
             :disabled="!canWrite"
-            class="w-full resize-none rounded-md bg-slate-50 px-3 py-2 text-sm ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+            :height="400"
+            placeholder="표준 답변 내용을 입력하세요"
           />
         </div>
 
@@ -801,7 +800,7 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           </div>
         </div>
       </template>
-    </AdminSlideOver>
+    </AdminModal>
 
     <!-- 삭제 확인 -->
     <AdminModal v-model="delOpen" title="표준답변 삭제" size="sm">

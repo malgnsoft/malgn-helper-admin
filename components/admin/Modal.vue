@@ -30,6 +30,7 @@ const SIZE_CLASS = {
   md: 'max-w-lg',
   lg: 'max-w-3xl',
   xl: 'max-w-[1000px]',
+  '2xl': 'max-w-[1120px]',
   full: 'max-w-[95vw]',
 } as const
 

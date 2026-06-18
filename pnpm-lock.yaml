@@ -14,6 +14,9 @@ importers:
       '@tailwindcss/vite':
         specifier: 4.3.0
         version: 4.3.0(vite@7.3.3(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(yaml@2.9.0))
+      '@tinymce/tinymce-vue':
+        specifier: ^6.0.1
+        version: 6.3.0(vue@3.5.35(typescript@5.9.3))
       lucide-vue-next:
         specifier: 1.0.0
         version: 1.0.0(vue@3.5.35(typescript@5.9.3))
@@ -2035,6 +2038,15 @@ packages:
     resolution: {integrity: sha512-A+jWpXtMpWXKhGLKQrXeC9mk1VgYeMWSJ+o0CTCEi+HLYMSQFdVmPG9lJz7d4XJyIkc5xVwZU9QY67QpScqnxA==}
     peerDependencies:
       vue: ^2.7.0 || ^3.0.0
+
+  '@tinymce/tinymce-vue@6.3.0':
+    resolution: {integrity: sha512-DSP8Jhd3XqCCliTnusfbmz3D8GqQ4iRzkc4aadYHDcJPVjkaqopJ61McOdH82CSy599vGLkPjGzqJYWJkRMiUA==}
+    peerDependencies:
+      tinymce: ^8.0.0 || ^7.0.0 || ^6.0.0 || ^5.5.1
+      vue: ^3.0.0
+    peerDependenciesMeta:
+      tinymce:
+        optional: true
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
@@ -6417,6 +6429,10 @@ snapshots:
   '@tanstack/vue-virtual@3.13.28(vue@3.5.35(typescript@5.9.3))':
     dependencies:
       '@tanstack/virtual-core': 3.17.0
+      vue: 3.5.35(typescript@5.9.3)
+
+  '@tinymce/tinymce-vue@6.3.0(vue@3.5.35(typescript@5.9.3))':
+    dependencies:
       vue: 3.5.35(typescript@5.9.3)
 
   '@tybys/wasm-util@0.10.2':
