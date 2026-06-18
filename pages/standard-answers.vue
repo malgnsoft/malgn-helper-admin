@@ -143,8 +143,8 @@ const applied = reactive({ scope: '', topicId: '', serviceId: '', approvalStatus
 
 /* scope 변경 시 topic 옵션을 해당 scope 로 제한(선택값이 안 맞으면 초기화) */
 const topicOpts = computed(() => {
+  // 공통: 공통 토픽만. 서비스: 공통 토픽도 함께(범용 주제) + 서비스 토픽.
   if (draft.scope === 'common') return topics.value.filter(t => t.scope === 'common')
-  if (draft.scope === 'service') return topics.value.filter(t => t.scope === 'service')
   return topics.value
 })
 watch(() => draft.scope, () => {
@@ -254,8 +254,8 @@ const form = reactive({
 })
 
 const formTopicOpts = computed(() => {
+  // 공통 답변: 공통 토픽만. 서비스 답변: 공통 토픽(로그인·환불 등 범용)도 함께 + 서비스 토픽.
   if (form.scope === 'common') return topics.value.filter(t => t.scope === 'common')
-  if (form.scope === 'service') return topics.value.filter(t => t.scope === 'service')
   return topics.value
 })
 watch(() => form.scope, () => {
