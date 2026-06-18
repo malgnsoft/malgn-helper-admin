@@ -38,8 +38,8 @@ export const ADMIN_MENU: MenuGroup[] = [
     items: [
       { key: "bots", label: "봇 관리", path: "/bots", icon: "bot", roles: ["admin", "developer"] },
       { key: "standard-answers", label: "Q&A 표준답변", path: "/standard-answers", icon: "bookmark" },
-      // 안내글(표준 안내답변): staff 첫 작성 안내글 트랙. Q&A 표준답변과 별도 테이블(hp_announce, dba 설계 중)로 분리 예정.
-      // 백엔드 GET /announces 미구현 → 현재는 메뉴·페이지 구조 + 준비 상태. developer↑ 가시.
+      // 안내글(표준 안내답변): staff 첫 작성 안내글 트랙. Q&A 표준답변과 별도 테이블(hp_announce)로 분리.
+      // GET /announces 실연동 — 목록/분류/승인 워크플로. 조회 developer↑, 본문수정/삭제 admin. 승인대기 배지 announces.vue 갱신.
       { key: "announces", label: "안내글", path: "/announces", icon: "megaphone", roles: ["admin", "developer"] },
       { key: "materials", label: "학습 자료", path: "/materials", icon: "file-text" },
       { key: "images", label: "이미지 카탈로그", path: "/images", icon: "image" },
