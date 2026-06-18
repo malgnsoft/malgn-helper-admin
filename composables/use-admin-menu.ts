@@ -37,6 +37,9 @@ export const ADMIN_MENU: MenuGroup[] = [
     label: "지식 자산",
     items: [
       { key: "bots", label: "봇 관리", path: "/bots", icon: "bot", roles: ["admin", "developer"] },
+      // 문의 수집: PMS(tb_post) 누적 문의/답변을 스캔→검토→commit 으로 표준답변/안내글 draft 후보로 적재.
+      // POST /pms/harvest/scan(미리보기)·/commit(선택 등록) — developer↑.
+      { key: "harvest", label: "문의 수집", path: "/harvest", icon: "download-cloud", roles: ["admin", "developer"] },
       { key: "standard-answers", label: "Q&A 표준답변", path: "/standard-answers", icon: "bookmark" },
       // 안내글(표준 안내답변): staff 첫 작성 안내글 트랙. Q&A 표준답변과 별도 테이블(hp_announce)로 분리.
       // GET /announces 실연동 — 목록/분류/승인 워크플로. 조회 developer↑, 본문수정/삭제 admin. 승인대기 배지 announces.vue 갱신.

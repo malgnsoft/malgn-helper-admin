@@ -26,6 +26,7 @@ import {
   Code2,
   Bot,
   Megaphone,
+  DownloadCloud,
   Search,
   ChevronDown,
   MessageSquareDot,
@@ -53,6 +54,7 @@ const ICONS: Record<string, any> = {
   "code-2": Code2,
   bot: Bot,
   megaphone: Megaphone,
+  "download-cloud": DownloadCloud,
 };
 
 const route = useRoute();
