@@ -1,12 +1,12 @@
 // middleware/auth.global.ts
 // 모든 라우트에서 인증 체크. 미인증이면 /login으로 리다이렉트.
-// /login·/forbidden은 예외.
+// /login·/forbidden·/slogin(맑은오피스 SSO)은 예외.
 
 export default defineNuxtRouteMiddleware(async (to) => {
   if (process.server) return; // SSR skip — cookie는 클라이언트에서 검증
 
-  // 인증 불필요 경로
-  if (to.path === "/login" || to.path === "/forbidden") return;
+  // 인증 불필요 경로 (/slogin = 맑은오피스 SSO 핸드오프, 자체적으로 세션 발급)
+  if (to.path === "/login" || to.path === "/forbidden" || to.path === "/slogin") return;
 
   const userState = useAuthUser();
 

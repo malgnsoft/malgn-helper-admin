@@ -48,6 +48,22 @@ export async function login(loginId: string, password: string) {
   return data.user;
 }
 
+/** 맑은오피스 SSO — /slogin?ek=&id= 핸드오프. GET /auth/sso 가 검증 후 세션 쿠키를 발급한다. */
+export async function ssoLogin(ek: string, id: string) {
+  const url = new URL(`${API_BASE}/auth/sso`);
+  url.searchParams.set("ek", ek);
+  url.searchParams.set("id", id);
+  const res = await fetch(url, { credentials: "include", cache: "no-store" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error || `SSO 로그인 실패 (${res.status})`);
+  }
+  const data = (await res.json()) as { user: AuthUser };
+  const userState = useAuthUser();
+  userState.value = data.user;
+  return data.user;
+}
+
 export async function logout() {
   await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
   const userState = useAuthUser();
