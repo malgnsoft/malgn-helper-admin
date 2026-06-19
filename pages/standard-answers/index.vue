@@ -127,6 +127,14 @@ const LIMIT = 60
 const offset = ref(0)
 const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
 
+/* 정렬: 수정일(updated) / 등록일(created). 변경 시 첫 페이지로 재조회. */
+const sort = ref<'updated' | 'created'>('updated')
+const SORT_OPTS = [
+  { value: 'updated', label: '수정일순' },
+  { value: 'created', label: '등록일순' },
+]
+watch(sort, () => { offset.value = 0; load() })
+
 const badges = useAdminBadges()
 
 async function load() {
@@ -136,6 +144,7 @@ async function load() {
     const url = new URL(`${API_BASE}/standard-answers`)
     url.searchParams.set('limit', String(LIMIT))
     url.searchParams.set('offset', String(offset.value))
+    url.searchParams.set('sort', sort.value)
     if (applied.scope) url.searchParams.set('scope', applied.scope)
     if (applied.topicId) url.searchParams.set('topicId', applied.topicId)
     if (applied.serviceId) url.searchParams.set('serviceId', applied.serviceId)
@@ -303,6 +312,12 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
       :shown="rows.length"
       empty-text="조건에 맞는 표준답변이 없습니다."
     >
+      <template #headerRight>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] text-slate-400">정렬</span>
+          <AdminSegment v-model="sort" :options="SORT_OPTS" />
+        </div>
+      </template>
       <template #footer>
         <AdminPagination :page="page" :page-size="LIMIT" :total="total" @update:page="goPage" />
       </template>
