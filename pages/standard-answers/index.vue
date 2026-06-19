@@ -127,13 +127,17 @@ const LIMIT = 60
 const offset = ref(0)
 const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
 
-/* 정렬: 수정일(updated) / 등록일(created). 변경 시 첫 페이지로 재조회. */
-const sort = ref<'updated' | 'created'>('updated')
+/* 정렬: 필드(수정일/등록일/사용순) + 방향(내림/오름). 변경 시 첫 페이지로 재조회. */
+const sortBy = ref<'updated' | 'created' | 'usage'>('updated')
+const sortDir = ref<'desc' | 'asc'>('desc')
 const SORT_OPTS = [
-  { value: 'updated', label: '수정일순' },
-  { value: 'created', label: '등록일순' },
+  { value: 'updated', label: '수정일' },
+  { value: 'created', label: '등록일' },
+  { value: 'usage', label: '사용순' },
 ]
-watch(sort, () => { offset.value = 0; load() })
+const sortParam = computed(() => `${sortBy.value}_${sortDir.value}`)
+function toggleSortDir() { sortDir.value = sortDir.value === 'desc' ? 'asc' : 'desc' }
+watch([sortBy, sortDir], () => { offset.value = 0; load() })
 
 const badges = useAdminBadges()
 
@@ -144,7 +148,7 @@ async function load() {
     const url = new URL(`${API_BASE}/standard-answers`)
     url.searchParams.set('limit', String(LIMIT))
     url.searchParams.set('offset', String(offset.value))
-    url.searchParams.set('sort', sort.value)
+    url.searchParams.set('sort', sortParam.value)
     if (applied.scope) url.searchParams.set('scope', applied.scope)
     if (applied.topicId) url.searchParams.set('topicId', applied.topicId)
     if (applied.serviceId) url.searchParams.set('serviceId', applied.serviceId)
@@ -315,7 +319,15 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
       <template #headerRight>
         <div class="flex items-center gap-2">
           <span class="text-[11px] text-slate-400">정렬</span>
-          <AdminSegment v-model="sort" :options="SORT_OPTS" />
+          <AdminSegment v-model="sortBy" :options="SORT_OPTS" />
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
+            :title="sortDir === 'desc' ? '내림차순(최신·많은 순)' : '오름차순(오래된·적은 순)'"
+            @click="toggleSortDir"
+          >
+            {{ sortDir === 'desc' ? '↓ 내림' : '↑ 오름' }}
+          </button>
         </div>
       </template>
       <template #footer>
