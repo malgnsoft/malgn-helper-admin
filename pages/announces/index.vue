@@ -48,7 +48,13 @@ type AnnounceRow = {
   rejection_reason: string | null
   created_at?: string
   updated_at: string
+  /* PII 게이트 (§4-B) — 목록 응답 보강 시 채워짐. 미배포 시 undefined → 배지 비표시. */
+  pii_text_status?: TextPiiStatus | null
+  image_pii_status?: ImagePiiStatus | null
 }
+
+type ImagePiiStatus = 'none' | 'pending' | 'suspect' | 'clear' | 'removed' | 'masked' | 'blocked'
+type TextPiiStatus = 'pending' | 'clear' | 'masked' | 'blocked'
 
 type Topic = { id: number; slug: string; scope: Scope; label: string; active: boolean }
 type Service = { id: number; slug: string; name: string; active: boolean }
@@ -72,6 +78,18 @@ const SCOPE_CLS: Record<Scope, string> = {
   service: 'bg-sky-50 text-sky-700',
 }
 
+/* 이미지 PII 상태 배지 (§4-B). pending/suspect 는 검수 필요 강조. */
+const IMG_PII_META: Record<ImagePiiStatus, { label: string; cls: string; alert: boolean }> = {
+  none:    { label: '—',     cls: 'text-slate-300',                 alert: false },
+  pending: { label: '미검수', cls: 'bg-amber-100 text-amber-700',    alert: true },
+  suspect: { label: '의심',   cls: 'bg-rose-100 text-rose-700',      alert: true },
+  clear:   { label: '통과',   cls: 'bg-emerald-100 text-emerald-700', alert: false },
+  removed: { label: '제거',   cls: 'bg-sky-100 text-sky-700',        alert: false },
+  masked:  { label: '가림',   cls: 'bg-sky-100 text-sky-700',        alert: false },
+  blocked: { label: '차단',   cls: 'bg-rose-200 text-rose-800',      alert: true },
+}
+const hasPiiCols = computed(() => rows.value.some(r => r.image_pii_status != null || r.pii_text_status != null))
+
 const APPROVAL_FILTER_OPTS = [
   { value: '', label: '전체' },
   { value: 'draft', label: '초안' },
@@ -81,17 +99,19 @@ const APPROVAL_FILTER_OPTS = [
   { value: 'archived', label: '보관' },
 ] as const
 
-const COLUMNS: TableColumn[] = [
+/* 컬럼 — PII 게이트 컬럼은 목록 응답 보강 시(hasPiiCols) 자동 삽입. */
+const COLUMNS = computed<TableColumn[]>(() => [
   { key: 'id',        label: '#',      class: 'px-5 pr-3 w-14' },
   { key: 'title',     label: '제목' },
   { key: 'scope',     label: '분류',   align: 'center', class: 'px-3 w-16' },
   { key: 'topic',     label: '토픽',   class: 'px-3 w-32' },
   { key: 'service',   label: '서비스', class: 'px-3 w-32' },
   { key: 'status',    label: '상태',   align: 'center', class: 'px-3 w-20' },
+  ...(hasPiiCols.value ? [{ key: 'pii', label: 'PII', align: 'center', class: 'px-3 w-20' } as TableColumn] : []),
   { key: 'source',    label: '출처',   align: 'right', class: 'px-3 w-20' },
   { key: 'updatedAt', label: '수정일', align: 'right' },
   { key: 'actions',   label: '',       align: 'right', class: 'px-5 pl-3 w-20' },
-]
+])
 
 const selectCls =
   'h-9 w-full rounded-md bg-white px-3 text-[13px] text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-500'
@@ -135,6 +155,23 @@ const offset = ref(0)
 const page = computed(() => Math.floor(offset.value / LIMIT) + 1)
 
 const badges = useAdminBadges()
+
+/* PII 검수 우선 보기 — 현재 페이지 내에서 pending/suspect/blocked 를 위로 정렬(클라이언트). */
+const piiFirst = ref(false)
+const IMG_PRIORITY: Record<ImagePiiStatus, number> = {
+  blocked: 0, pending: 1, suspect: 2, removed: 3, masked: 3, clear: 4, none: 5,
+}
+const displayRows = computed<AnnounceRow[]>(() => {
+  if (!piiFirst.value || !hasPiiCols.value) return rows.value
+  return [...rows.value].sort((a, b) => {
+    const ta = a.pii_text_status === 'blocked' ? -1 : 0
+    const tb = b.pii_text_status === 'blocked' ? -1 : 0
+    if (ta !== tb) return ta - tb
+    const pa = IMG_PRIORITY[a.image_pii_status ?? 'none']
+    const pb = IMG_PRIORITY[b.image_pii_status ?? 'none']
+    return pa - pb
+  })
+})
 
 async function load() {
   pending.value = true
@@ -297,7 +334,7 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
 
       <AdminDataTable
         :columns="COLUMNS"
-        :rows="rows"
+        :rows="displayRows"
         :pending="pending"
         :error="error"
         title="전체 "
@@ -305,6 +342,12 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
         :shown="rows.length"
         empty-text="조건에 맞는 안내글이 없습니다."
       >
+        <template v-if="hasPiiCols" #headerRight>
+          <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+            <input v-model="piiFirst" type="checkbox" class="size-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+            PII 검수 우선
+          </label>
+        </template>
         <template #footer>
           <AdminPagination :page="page" :page-size="LIMIT" :total="total" @update:page="goPage" />
         </template>
@@ -312,7 +355,14 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           <tr class="cursor-pointer hover:bg-slate-50" @click="openDetail(row)">
             <td class="px-5 pr-3 py-3 font-mono text-[11px] text-slate-400">#{{ row.id }}</td>
             <td class="px-3 py-3">
-              <p class="text-[13px] font-semibold text-slate-900">{{ row.title }}</p>
+              <div class="flex items-center gap-1.5">
+                <p class="text-[13px] font-semibold text-slate-900">{{ row.title }}</p>
+                <span
+                  v-if="row.pii_text_status === 'blocked'"
+                  class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-rose-200 text-rose-800"
+                  title="텍스트 PII 차단 — 고유식별정보 발견. 마스킹 후 재상신 필요."
+                >PII 차단</span>
+              </div>
               <div
                 v-if="row.question"
                 class="qa-preview mt-0.5 max-w-xl text-[11.5px] leading-relaxed text-slate-500"
@@ -340,6 +390,15 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
                 class="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 :class="APPROVAL_META[row.approval_status].cls"
               >{{ APPROVAL_META[row.approval_status].label }}</span>
+            </td>
+            <td v-if="hasPiiCols" class="px-3 py-3 text-center">
+              <span
+                v-if="row.image_pii_status"
+                class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                :class="IMG_PII_META[row.image_pii_status].cls"
+                :title="`이미지 PII: ${IMG_PII_META[row.image_pii_status].label}`"
+              >{{ IMG_PII_META[row.image_pii_status].label }}</span>
+              <span v-else class="text-[11px] text-slate-300">—</span>
             </td>
             <td class="px-3 py-3 text-right font-mono text-[11px] text-slate-400">
               <span v-if="row.source_post_id">#{{ row.source_post_id }}</span>

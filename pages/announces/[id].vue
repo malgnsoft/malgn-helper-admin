@@ -26,6 +26,10 @@ const routeId = route.params.id as string
 type ApprovalStatus = 'draft' | 'reviewing' | 'approved' | 'rejected' | 'archived'
 type Scope = 'common' | 'service'
 
+/* PII 게이트 컬럼 (P2-EXPOSURE-GUARD §4-B) — 상세 응답(an.*)에 포함됨 */
+type ImagePiiStatus = 'none' | 'pending' | 'suspect' | 'clear' | 'removed' | 'masked' | 'blocked'
+type TextPiiStatus = 'pending' | 'clear' | 'masked' | 'blocked'
+
 type AnnounceRow = {
   id: number
   title: string
@@ -48,6 +52,12 @@ type AnnounceRow = {
   rejection_reason: string | null
   created_at?: string
   updated_at: string
+  /* PII 게이트 (§4-B) — 미배포 응답 대비 optional */
+  pii_text_status?: TextPiiStatus | null
+  image_pii_status?: ImagePiiStatus | null
+  private_source_flag?: 0 | 1 | null
+  pii_checked_by?: string | null
+  pii_checked_at?: string | null
 }
 
 type Topic = { id: number; slug: string; scope: Scope; label: string; active: boolean }
@@ -246,6 +256,30 @@ const allowedTransitions = computed<ApprovalStatus[]>(() =>
   current.value ? TRANSITIONS[current.value.approval_status] ?? [] : [],
 )
 
+/* ── PII 승인 게이트 (P2-EXPOSURE-GUARD §4-2) ── */
+const bodyHasImages = computed(() => /<img\b[^>]*\bsrc\s*=/i.test(current.value?.answer ?? ''))
+const imageGateOk = computed(() => {
+  const s = current.value?.image_pii_status ?? (bodyHasImages.value ? 'pending' : 'none')
+  return s === 'none' || s === 'clear' || s === 'removed' || s === 'masked'
+})
+const textBlocked = computed(() => current.value?.pii_text_status === 'blocked')
+const approveBlockReason = computed<string | null>(() => {
+  if (!imageGateOk.value) {
+    const s = current.value?.image_pii_status ?? 'pending'
+    return `이미지 PII 게이트 미통과(${s}) — 인용 이미지 검수를 clear/removed/masked 로 확정해야 승인할 수 있습니다.`
+  }
+  if (textBlocked.value) return '텍스트 PII 차단(blocked) — 본문에서 고유식별정보가 발견되어 승인할 수 없습니다. 마스킹 후 재시도하세요.'
+  return null
+})
+function transitionBlocked(to: ApprovalStatus): boolean {
+  return to === 'approved' && approveBlockReason.value !== null
+}
+
+async function onPiiReviewed() {
+  if (!current.value) return
+  try { current.value = await fetchOne(current.value.id) } catch { /* keep */ }
+}
+
 async function doTransition(to: ApprovalStatus) {
   if (!current.value || !canTransition.value) {
     transErr.value = '승인/반려/보관은 developer 이상 권한이 필요합니다.'
@@ -253,6 +287,11 @@ async function doTransition(to: ApprovalStatus) {
   }
   if (to === 'rejected' && !rejectReason.value.trim()) {
     transErr.value = '반려 사유는 필수입니다.'
+    return
+  }
+  // PII 승인 게이트 선차단 (§4-2) — api 422 와 이중화.
+  if (to === 'approved' && approveBlockReason.value) {
+    transErr.value = approveBlockReason.value
     return
   }
   transitioning.value = true
@@ -267,6 +306,11 @@ async function doTransition(to: ApprovalStatus) {
       body: JSON.stringify(body),
     })
     if (res.status === 403) throw new Error('권한이 부족합니다 (developer 이상 필요).')
+    if (res.status === 422) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string; matchedCount?: number; piiTextStatus?: string }
+      try { current.value = await fetchOne(current.value.id) } catch { /* keep */ }
+      throw new Error(j.error || 'PII 게이트에 의해 승인이 거부되었습니다.')
+    }
     if (!res.ok) {
       const j = (await res.json().catch(() => ({}))) as { error?: string }
       throw new Error(j.error || `API ${res.status}`)
@@ -465,7 +509,22 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
           </AdminFormRow>
         </AdminSettingsSection>
 
-        <!-- 3. 승인 워크플로 -->
+        <!-- 3. PII 검수 게이트 -->
+        <AdminPiiReviewPanel
+          :id="current.id"
+          table="announce"
+          :body="current.answer"
+          :image-pii-status="current.image_pii_status ?? null"
+          :text-pii-status="current.pii_text_status ?? null"
+          :private-source-flag="current.private_source_flag ?? null"
+          :pii-checked-by="current.pii_checked_by ?? null"
+          :pii-checked-at="current.pii_checked_at ?? null"
+          :can-review="canWrite"
+          :can-scan="canTransition"
+          @reviewed="onPiiReviewed"
+        />
+
+        <!-- 4. 승인 워크플로 -->
         <AdminSettingsSection
           title="승인 워크플로"
           description="검증된 안내만 챗봇에 노출됩니다. 승인/반려/보관은 developer 이상 권한이 필요합니다."
@@ -488,16 +547,24 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
                   v-for="to in allowedTransitions"
                   :key="to"
                   type="button"
-                  :disabled="!canTransition || transitioning"
+                  :disabled="!canTransition || transitioning || transitionBlocked(to)"
                   class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
                   :class="TRANSITION_META[to].cls"
-                  :title="canTransition ? '' : 'developer 이상 권한 필요'"
+                  :title="!canTransition ? 'developer 이상 권한 필요' : (transitionBlocked(to) ? (approveBlockReason ?? '') : '')"
                   @click="doTransition(to)"
                 >
                   <CheckCircle2 class="size-3.5" />{{ TRANSITION_META[to].label }}
                 </button>
               </div>
               <p v-else class="text-[12px] text-slate-400">현재 상태에서 가능한 전이가 없습니다.</p>
+
+              <!-- 승인 게이트 차단 사유 (§4-2) -->
+              <div
+                v-if="allowedTransitions.includes('approved') && approveBlockReason"
+                class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700"
+              >
+                <span class="font-semibold">승인 불가:</span> {{ approveBlockReason }}
+              </div>
 
               <!-- 반려 사유 -->
               <div v-if="allowedTransitions.includes('rejected')">
