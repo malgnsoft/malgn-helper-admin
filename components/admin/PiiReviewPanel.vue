@@ -16,7 +16,7 @@
   상태 변경 시 'reviewed' 이벤트로 부모가 current 행을 재조회하도록 한다.
 -->
 <script setup lang="ts">
-import { ShieldAlert, ScanSearch, ImageOff, AlertTriangle, Check } from 'lucide-vue-next'
+import { ShieldAlert, ScanSearch, ImageOff, AlertTriangle, Check, Eye } from 'lucide-vue-next'
 
 const API_BASE = 'https://malgn-helper-api.malgnsoft.workers.dev'
 
@@ -149,17 +149,27 @@ async function doReview(status: ReviewStatus) {
   }
 }
 
-/* ── §4-A-2 검수 체크리스트 (값 전사 금지 — 유형·위치만) ── */
-const CHECKLIST: string[] = [
-  '인명·연락처·이메일·주소가 화면에 보인다',
-  '고객 명단·표(여러 고객 행이 한 번에 노출되는 관리화면 리스트)가 보인다',
-  '계좌·카드·사업자번호가 보인다',
-  '주민등록번호 등 고유식별정보가 보인다 → 있으면 즉시 차단(blocked)',
-  '내부 관리화면(고객 비노출 전용 화면)이 그대로 캡처돼 있다',
-  '제3자 정보가 교차 노출된다(원 문의자 외 고객, L6)',
-  '일반 조작안내(메뉴·버튼 위치 등)로서 적합한가 — 적합하면 통과(clear)',
+/* ── §4-A-2 검수 체크리스트 (값 전사 금지 — 유형·위치만) ──
+   체크 = "각 항목을 눈으로 확인했다"는 검토 완료 표시(해당 여부 아님).
+   7개를 모두 확인해야 판정 버튼이 활성화된다(allChecked).
+   위험 신호(1~6)는 보이면 해당 판정으로, 통과 조건(7)은 맞으면 clear 로 안내한다.
+   hint = 권장 판정(색에만 의존하지 않도록 텍스트 병행), strong = 강조 표시. */
+type CheckItem = { text: string; hint: string; strong?: boolean }
+const RISK_CHECKLIST: CheckItem[] = [
+  { text: '인명·연락처·이메일·주소가 화면에 보인다', hint: '→ 가림/제거' },
+  { text: '고객 명단·표(여러 고객 행이 한 번에 노출되는 관리화면 리스트)가 보인다', hint: '→ 차단/가림' },
+  { text: '계좌·카드·사업자번호가 보인다', hint: '→ 가림/제거' },
+  { text: '주민등록번호 등 고유식별정보가 보인다', hint: '→ 즉시 차단(blocked)', strong: true },
+  { text: '내부 관리화면(고객 비노출 전용 화면)이 그대로 캡처돼 있다', hint: '→ 차단/가림' },
+  { text: '제3자 정보가 교차 노출된다(원 문의자 외 고객, L6)', hint: '→ 차단/가림' },
 ]
-const checked = ref<boolean[]>(CHECKLIST.map(() => false))
+const PASS_CHECKLIST: CheckItem[] = [
+  { text: '일반 조작안내(메뉴·버튼 위치 등)로서 적합한가', hint: '→ 통과(clear)' },
+]
+/* 체크 상태 배열은 위험(0~5) + 통과(6) 순서로 단일 관리 — allChecked 로직 비파괴 유지(총 7항목) */
+const RISK_COUNT = RISK_CHECKLIST.length
+const TOTAL_COUNT = RISK_COUNT + PASS_CHECKLIST.length
+const checked = ref<boolean[]>(Array.from({ length: TOTAL_COUNT }, () => false))
 const allChecked = computed(() => checked.value.every(Boolean))
 
 function fmtDateTime(iso?: string | null) {
@@ -278,23 +288,69 @@ const privateSource = computed(() => props.privateSourceFlag === 1 || props.priv
     </AdminFormRow>
 
     <!-- 3) §4-A-2 검수 체크리스트 + 판정 -->
-    <AdminFormRow v-if="hasImages" label="검수 체크리스트" hint="값 전사 금지 — 유형·위치만 확인. 전 항목 확인 후 판정하세요.">
+    <AdminFormRow v-if="hasImages" label="검수 체크리스트" hint="값 전사 금지 — 유형·위치만 확인합니다.">
       <div class="space-y-3">
-        <ul class="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <li v-for="(item, i) in CHECKLIST" :key="i" class="flex items-start gap-2">
-            <input
-              :id="`pii-chk-${id}-${i}`"
-              v-model="checked[i]"
-              type="checkbox"
-              :disabled="!canReview"
-              class="mt-0.5 size-3.5 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-            />
-            <label :for="`pii-chk-${id}-${i}`" class="text-[12px] leading-relaxed text-slate-700">{{ item }}</label>
-          </li>
-        </ul>
+        <!-- 체크 의미 안내 -->
+        <div class="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] text-slate-600">
+          <Eye class="mt-0.5 size-4 shrink-0 text-slate-400" />
+          <p class="leading-relaxed">
+            <span class="font-semibold text-slate-700">체크 = 각 항목을 눈으로 확인했다는 표시(검토 완료)</span>입니다.
+            해당 여부를 표시하는 것이 아니라, 빠짐없이 살펴봤다는 의미입니다.
+            <span class="font-semibold text-slate-700">7개를 모두 확인</span>해야 아래 판정 버튼이 활성화됩니다.
+          </p>
+        </div>
+
+        <!-- 위험 신호 그룹 (1~6) -->
+        <div class="overflow-hidden rounded-lg border border-amber-300 bg-amber-50/60">
+          <div class="flex items-center gap-1.5 border-b border-amber-200 bg-amber-100/70 px-3 py-2 text-[12px] font-semibold text-amber-800">
+            <AlertTriangle class="size-4 shrink-0" />
+            <span>위험 신호 — 보이면 해당 판정 (확인 후 체크)</span>
+          </div>
+          <ul class="space-y-1.5 p-3">
+            <li v-for="(item, i) in RISK_CHECKLIST" :key="`r-${i}`" class="flex items-start gap-2">
+              <input
+                :id="`pii-chk-${id}-${i}`"
+                v-model="checked[i]"
+                type="checkbox"
+                :disabled="!canReview"
+                class="mt-0.5 size-3.5 rounded border-amber-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+              />
+              <label :for="`pii-chk-${id}-${i}`" class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12px] leading-relaxed text-slate-700">
+                <span>{{ item.text }}</span>
+                <span
+                  class="inline-flex items-center rounded px-1.5 py-px text-[10px] font-semibold"
+                  :class="item.strong ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-500'"
+                >{{ item.hint }}</span>
+              </label>
+            </li>
+          </ul>
+        </div>
+
+        <!-- 통과 조건 그룹 (7) -->
+        <div class="overflow-hidden rounded-lg border border-emerald-300 bg-emerald-50/60">
+          <div class="flex items-center gap-1.5 border-b border-emerald-200 bg-emerald-100/70 px-3 py-2 text-[12px] font-semibold text-emerald-800">
+            <Check class="size-4 shrink-0" />
+            <span>통과 조건 — 맞으면 통과 (확인 후 체크)</span>
+          </div>
+          <ul class="space-y-1.5 p-3">
+            <li v-for="(item, j) in PASS_CHECKLIST" :key="`p-${j}`" class="flex items-start gap-2">
+              <input
+                :id="`pii-chk-${id}-${RISK_COUNT + j}`"
+                v-model="checked[RISK_COUNT + j]"
+                type="checkbox"
+                :disabled="!canReview"
+                class="mt-0.5 size-3.5 rounded border-emerald-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+              />
+              <label :for="`pii-chk-${id}-${RISK_COUNT + j}`" class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12px] leading-relaxed text-slate-700">
+                <span>{{ item.text }}</span>
+                <span class="inline-flex items-center rounded bg-emerald-100 px-1.5 py-px text-[10px] font-semibold text-emerald-700">{{ item.hint }}</span>
+              </label>
+            </li>
+          </ul>
+        </div>
 
         <p class="text-[11px] text-slate-400">
-          판정은 체크리스트 전 항목을 확인한 뒤 누르세요. 판정 결과·검수자는 감사 로그에 기록됩니다.
+          7개 항목을 모두 확인한 뒤 판정을 누르세요. 판정 결과·검수자는 감사 로그에 기록됩니다.
         </p>
 
         <div class="flex flex-wrap gap-2">
@@ -311,6 +367,14 @@ const privateSource = computed(() => props.privateSourceFlag === 1 || props.priv
             <Check class="size-3.5" />{{ b.label }}
           </button>
         </div>
+
+        <!-- 판정 버튼 의미 설명 -->
+        <ul class="space-y-0.5 text-[11px] leading-relaxed text-slate-500">
+          <li><span class="font-semibold text-emerald-700">통과(clear)</span> — PII 없음, 그대로 노출 OK</li>
+          <li><span class="font-semibold text-sky-700">가림(masked)</span> — 일부 PII를 가린 처리본으로 교체 후 노출 OK</li>
+          <li><span class="font-semibold text-slate-700">제거(removed)</span> — 인용 이미지만 삭제(본문 답변은 유지)</li>
+          <li><span class="font-semibold text-rose-700">차단(blocked)</span> — 노출 차단(고유식별정보 등 노출 절대 불가)</li>
+        </ul>
 
         <p v-if="!canReview" class="text-[11px] text-amber-600">
           이미지 PII 판정은 admin 권한이 필요합니다. 현재 계정은 확인만 가능합니다.
