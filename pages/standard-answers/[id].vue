@@ -502,7 +502,7 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
             <AdminRichEditor
               v-model="form.question"
               :disabled="!canWrite"
-              :height="220"
+              :height="400"
               placeholder="대표 질문 문장"
             />
           </AdminFormRow>
@@ -510,7 +510,7 @@ function fmtDate(iso?: string | null) { return iso ? iso.slice(0, 10) : '—' }
             <AdminRichEditor
               v-model="form.answer"
               :disabled="!canWrite"
-              :height="460"
+              :height="720"
               placeholder="표준 답변 내용을 입력하세요"
             />
           </AdminFormRow>
