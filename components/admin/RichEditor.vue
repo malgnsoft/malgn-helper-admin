@@ -38,8 +38,17 @@ const init = {
   toolbar:
     "blocks fontfamily fontsize | bold italic underline strikethrough blockquote | forecolor backcolor | bullist numlist outdent indent | alignleft aligncenter alignright alignjustify | table link image media | removeformat code",
   toolbar_mode: "wrap" as const,
+  // 구조화 HTML(표·콜아웃·data-* 박스) 편집 보존
+  extended_valid_elements: "div[data-caution|data-callout|class|style],code,h3,h4,hr",
   content_style:
-    "body{font-family:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;line-height:1.7;color:#1e293b} img{max-width:100%;height:auto}",
+    "body{font-family:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;line-height:1.7;color:#1e293b}" +
+    "img{max-width:100%;height:auto}" +
+    "h3{font-size:1.05em;font-weight:700;margin:1.1em 0 .5em;color:#0f172a}h4{font-size:.98em;font-weight:700;margin:1em 0 .4em;color:#334155}" +
+    "table{border-collapse:collapse;width:100%;margin:.9em 0;font-size:.95em}th,td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left;vertical-align:top}th{background:#f8fafc;font-weight:700;color:#0f172a}tbody tr:nth-child(even) td{background:#fafcff}" +
+    "code{background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em}" +
+    "ol,ul{padding-left:1.4em;margin:.6em 0}li{margin:.25em 0}hr{border:0;border-top:1px solid #e2e8f0;margin:1.1em 0}" +
+    "[data-callout]{margin:1em 0;padding:.75em 1em;border-left:3px solid #6366f1;background:#eef2ff;border-radius:0 8px 8px 0;color:#312e81}[data-callout=summary]::before{content:'요지 ';font-size:.72em;font-weight:700;color:#4f46e5}" +
+    "[data-caution]:not([style]){margin:1em 0;padding:.75em 1em;border-left:3px solid #f43f5e;background:#fff1f2;border-radius:0 8px 8px 0;color:#9f1239}",
 };
 </script>
 

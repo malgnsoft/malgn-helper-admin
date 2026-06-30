@@ -17,3 +17,161 @@ body {
   background-color: #f8fafc; /* slate-50 — handoff_noti 본문 배경 */
   color: #0f172a; /* slate-900 */
 }
+
+/*
+  구조화 본문 공통 스타일 (.rich-content)
+  ─ 안내글/표준답변 본문의 구조 HTML(표·콜아웃·주의배너·소제목·코드)을 표시처에서 일관되게 렌더.
+  ─ 에디터 내부 미리보기(RichEditor content_style)와 동일 톤을 유지한다. 양쪽 수정 시 함께 갱신할 것.
+  ─ 색상 톤: slate(본문) + 콜아웃 indigo + 주의 amber.
+*/
+.rich-content {
+  color: #1e293b; /* slate-800 */
+  line-height: 1.7;
+}
+.rich-content h3 {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: #0f172a; /* slate-900 */
+  margin: 1.4em 0 0.5em;
+  line-height: 1.4;
+}
+.rich-content h4 {
+  font-size: 0.97em;
+  font-weight: 600;
+  color: #334155; /* slate-700 */
+  margin: 1.1em 0 0.4em;
+}
+.rich-content p {
+  margin: 0.6em 0;
+}
+.rich-content ul,
+.rich-content ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.rich-content ul {
+  list-style: disc;
+}
+.rich-content ol {
+  list-style: decimal;
+}
+.rich-content li {
+  margin: 0.2em 0;
+}
+.rich-content hr {
+  border: 0;
+  border-top: 1px solid #e2e8f0; /* slate-200 */
+  margin: 1.2em 0;
+}
+.rich-content a {
+  color: #2563eb; /* blue-600 */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rich-content blockquote {
+  margin: 0.8em 0;
+  padding: 0.4em 0 0.4em 1em;
+  border-left: 3px solid #cbd5e1; /* slate-300 */
+  color: #475569; /* slate-600 */
+}
+
+/* 표 — 100% 폭, 셀 border, 헤더 배경/굵게, 모바일 가로 스크롤 대비 */
+.rich-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.9em 0;
+  font-size: 0.94em;
+}
+.rich-content table th,
+.rich-content table td {
+  border: 1px solid #e2e8f0; /* slate-200 */
+  padding: 0.5em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+.rich-content table th {
+  background: #f1f5f9; /* slate-100 */
+  font-weight: 600;
+  color: #334155; /* slate-700 */
+}
+.rich-content table tbody tr:nth-child(even) td {
+  background: #f8fafc; /* slate-50 */
+}
+
+/* 인라인 코드 / 코드 블록 — 등폭·연한 배경 */
+.rich-content code {
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  background: #f1f5f9; /* slate-100 */
+  color: #be185d; /* pink-700 — 본문과 구분되는 코드 톤 */
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+}
+.rich-content pre {
+  background: #f1f5f9; /* slate-100 */
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  margin: 0.9em 0;
+  overflow-x: auto;
+}
+.rich-content pre code {
+  background: transparent;
+  color: #1e293b; /* slate-800 */
+  padding: 0;
+  border-radius: 0;
+}
+
+/* 요지 콜아웃 — 좌측 강조선 + 연한 배경 박스 */
+.rich-content [data-callout] {
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  border-left: 3px solid #6366f1; /* indigo-500 */
+  background: #eef2ff; /* indigo-50 */
+  border-radius: 0 8px 8px 0;
+  color: #312e81; /* indigo-900 */
+}
+.rich-content [data-callout="summary"]::before {
+  content: "요지";
+  display: inline-block;
+  margin-right: 0.5em;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #4f46e5; /* indigo-600 */
+}
+.rich-content [data-callout] > :first-child {
+  margin-top: 0;
+}
+.rich-content [data-callout] > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+  주의 배너 — amber 경고 박스.
+  인라인 style이 있는 기존 배너는 그 style을 그대로 두고(클래스 배경/테두리는 적용 안 함),
+  인라인 style이 없는 [data-caution]에만 클래스 스타일을 적용해 충돌을 피한다.
+*/
+.rich-content [data-caution]:not([style]) {
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  border: 1px solid #fcd34d; /* amber-300 */
+  background: #fffbeb; /* amber-50 */
+  border-radius: 8px;
+  color: #92400e; /* amber-800 */
+}
+.rich-content [data-caution]:not([style])::before {
+  content: "주의";
+  display: inline-block;
+  margin-right: 0.5em;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #b45309; /* amber-700 */
+}
+.rich-content [data-caution] > :first-child {
+  margin-top: 0;
+}
+.rich-content [data-caution] > :last-child {
+  margin-bottom: 0;
+}
