@@ -96,7 +96,7 @@ async function runScan() {
   scanErr.value = null
   scanResult.value = null
   try {
-    const res = await fetch(`${API_BASE}/standard-answers/${props.id}/pii-image-scan${tableQuery.value}`, {
+    const res = await apiFetch(`${API_BASE}/standard-answers/${props.id}/pii-image-scan${tableQuery.value}`, {
       method: 'POST', credentials: 'include',
     })
     if (res.status === 403) throw new Error('Vision 스캔은 developer 이상 권한이 필요합니다.')
@@ -129,7 +129,7 @@ async function doReview(status: ReviewStatus) {
   reviewing.value = true
   reviewErr.value = null
   try {
-    const res = await fetch(`${API_BASE}/standard-answers/${props.id}/pii-image-review${tableQuery.value}`, {
+    const res = await apiFetch(`${API_BASE}/standard-answers/${props.id}/pii-image-review${tableQuery.value}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

@@ -60,7 +60,7 @@ async function load() {
     url.searchParams.set('offset', String(offset.value))
     if (search.value.trim()) url.searchParams.set('search', search.value.trim())
     if (sourceFilter.value) url.searchParams.set('source', sourceFilter.value)
-    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = (await res.json()) as { total: number; rows: Img[] }
     rows.value = data.rows

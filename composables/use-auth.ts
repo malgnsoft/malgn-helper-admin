@@ -1,5 +1,7 @@
 // composables/use-auth.ts
-// admin 인증 — API의 helper_session cookie + GET /auth/me로 사용자 정보 동기화.
+// admin 인증 — Bearer 토큰(JWT) 기반.
+// 로그인/SSO 응답의 token을 localStorage에 저장하고 모든 API 호출에 Authorization 헤더로 전송.
+// cross-site 서드파티 쿠키 차단 대응. (쿠키 폴백도 credentials:'include'로 유지)
 
 export type AuthUser = {
   id: number;
@@ -12,16 +14,58 @@ export type AuthUser = {
 
 const API_BASE = "https://malgn-helper-api.malgnsoft.workers.dev";
 
+/** localStorage 토큰 키 */
+const TOKEN_KEY = "helper_session_token";
+
 export function useAuthUser() {
   return useState<AuthUser | null>("auth-user", () => null);
 }
 
-/** /auth/me 호출. cookie가 유효하면 사용자 정보를 가져온다. 401이면 null. */
+/** 저장된 세션 토큰 조회. 클라이언트에서만 접근(SSR 안전). 없으면 null. */
+export function getAuthToken(): string | null {
+  if (!import.meta.client) return null;
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** 세션 토큰 저장(클라이언트 전용). */
+function setAuthToken(token: string): void {
+  if (!import.meta.client) return;
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* storage 접근 불가 시 무시 */
+  }
+}
+
+/** 세션 토큰 삭제(클라이언트 전용). */
+export function clearAuthToken(): void {
+  if (!import.meta.client) return;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* noop */
+  }
+}
+
+/** 저장 토큰이 있으면 Authorization: Bearer 헤더를 반환. 없으면 빈 객체. */
+export function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** /auth/me 호출. 저장 토큰을 Bearer로 전송. 토큰 없거나 401이면 null. */
 export async function fetchMe(): Promise<AuthUser | null> {
+  const token = getAuthToken();
+  if (!token) return null;
   try {
     const res = await fetch(`${API_BASE}/auth/me`, {
       credentials: "include",
       cache: "no-store",
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { user: AuthUser };
@@ -40,15 +84,16 @@ export async function login(loginId: string, password: string) {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as any).error || `로그인 실패 (${res.status})`);
+    throw new Error((body as { error?: string }).error || `로그인 실패 (${res.status})`);
   }
-  const data = (await res.json()) as { user: AuthUser };
+  const data = (await res.json()) as { user: AuthUser; token?: string };
+  if (data.token) setAuthToken(data.token);
   const userState = useAuthUser();
   userState.value = data.user;
   return data.user;
 }
 
-/** 맑은오피스 SSO — /slogin?ek=&id= 핸드오프. GET /auth/sso 가 검증 후 세션 쿠키를 발급한다. */
+/** 맑은오피스 SSO — /slogin?ek=&id= 핸드오프. GET /auth/sso 가 검증 후 token/세션 발급. */
 export async function ssoLogin(ek: string, id: string) {
   const url = new URL(`${API_BASE}/auth/sso`);
   url.searchParams.set("ek", ek);
@@ -56,16 +101,25 @@ export async function ssoLogin(ek: string, id: string) {
   const res = await fetch(url, { credentials: "include", cache: "no-store" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as any).error || `SSO 로그인 실패 (${res.status})`);
+    throw new Error((body as { error?: string }).error || `SSO 로그인 실패 (${res.status})`);
   }
-  const data = (await res.json()) as { user: AuthUser };
+  const data = (await res.json()) as { user: AuthUser; token?: string };
+  if (data.token) setAuthToken(data.token);
   const userState = useAuthUser();
   userState.value = data.user;
   return data.user;
 }
 
 export async function logout() {
-  await fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" });
+  // 서버 세션(쿠키) 정리. 토큰은 클라이언트에서 폐기.
+  await fetch(`${API_BASE}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: { ...authHeaders() },
+  }).catch(() => {
+    /* 네트워크 실패해도 로컬 상태는 정리 */
+  });
+  clearAuthToken();
   const userState = useAuthUser();
   userState.value = null;
 }

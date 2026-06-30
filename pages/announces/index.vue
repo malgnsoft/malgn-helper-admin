@@ -122,8 +122,8 @@ const services = ref<Service[]>([])
 async function loadCatalog() {
   try {
     const [tRes, sRes] = await Promise.all([
-      fetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
-      fetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
     ])
     if (tRes.ok) topics.value = ((await tRes.json()) as { rows: Topic[] }).rows?.filter(t => t.active) ?? []
     if (sRes.ok) services.value = ((await sRes.json()) as { rows: Service[] }).rows?.filter(s => s.active) ?? []
@@ -185,7 +185,7 @@ async function load() {
     if (applied.serviceId) url.searchParams.set('serviceId', applied.serviceId)
     if (applied.approvalStatus) url.searchParams.set('approvalStatus', applied.approvalStatus)
     if (applied.q.trim()) url.searchParams.set('search', applied.q.trim())
-    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
     if (res.status === 403) throw new Error('admin/developer 권한이 필요합니다.')
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = (await res.json()) as { rows: AnnounceRow[]; total: number }
@@ -206,7 +206,7 @@ async function refreshPendingBadge() {
       const url = new URL(`${API_BASE}/announces`)
       url.searchParams.set('limit', '1')
       url.searchParams.set('approvalStatus', st)
-      const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+      const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) return
       const d = (await res.json()) as { total: number }
       count += d.total ?? 0
@@ -261,7 +261,7 @@ async function confirmDelete() {
   if (!delTarget.value) return
   deleting.value = true
   try {
-    const res = await fetch(`${API_BASE}/announces/${delTarget.value.id}`, {
+    const res = await apiFetch(`${API_BASE}/announces/${delTarget.value.id}`, {
       method: 'DELETE', credentials: 'include',
     })
     if (!res.ok) throw new Error(`API ${res.status}`)

@@ -133,8 +133,8 @@ const services = ref<Service[]>([])
 async function loadCatalog() {
   try {
     const [tRes, sRes] = await Promise.all([
-      fetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
-      fetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
     ])
     if (tRes.ok) topics.value = ((await tRes.json()) as { rows: Topic[] }).rows?.filter(t => t.active) ?? []
     if (sRes.ok) services.value = ((await sRes.json()) as { rows: Service[] }).rows?.filter(s => s.active) ?? []
@@ -186,7 +186,7 @@ function fillForm(row: SARow | null) {
 }
 
 async function fetchOne(id: number | string): Promise<SARow> {
-  const res = await fetch(`${API_BASE}/standard-answers/${id}`, { credentials: 'include', cache: 'no-store' })
+  const res = await apiFetch(`${API_BASE}/standard-answers/${id}`, { credentials: 'include', cache: 'no-store' })
   if (res.status === 404) throw new Error('찾을 수 없음')
   if (res.status === 403) throw new Error('admin/developer 권한이 필요합니다.')
   if (!res.ok) throw new Error(`API ${res.status}`)
@@ -226,7 +226,7 @@ async function refreshPendingBadge() {
       const url = new URL(`${API_BASE}/standard-answers`)
       url.searchParams.set('limit', '1')
       url.searchParams.set('approvalStatus', st)
-      const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+      const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) return
       const d = (await res.json()) as { total: number }
       count += d.total ?? 0
@@ -246,7 +246,7 @@ async function refreshVerificationBadge() {
     const url = new URL(`${API_BASE}/standard-answers`)
     url.searchParams.set('needsVerification', 'true')
     url.searchParams.set('limit', '1')
-    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) return
     const d = (await res.json()) as { total?: number; needsVerificationSkipped?: boolean }
     if (d.needsVerificationSkipped) return   // 컬럼 미적용 환경 — 배지 비표시
@@ -279,7 +279,7 @@ async function doSave() {
   try {
     if (!isNew.value && current.value) {
       // 본문 + 분류 PATCH (전이는 별도 엔드포인트)
-      const res = await fetch(`${API_BASE}/standard-answers/${current.value.id}`, {
+      const res = await apiFetch(`${API_BASE}/standard-answers/${current.value.id}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -308,7 +308,7 @@ async function doSave() {
       if (form.scope) body.scope = form.scope
       if (form.topicId) body.topicId = Number(form.topicId)
       if (form.serviceId) body.serviceId = Number(form.serviceId)
-      const res = await fetch(`${API_BASE}/standard-answers`, {
+      const res = await apiFetch(`${API_BASE}/standard-answers`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -593,7 +593,7 @@ async function doTransition(to: ApprovalStatus, overrideReason?: string) {
     const body: Record<string, unknown> = { to }
     if (to === 'rejected' && overrideReason) body.reason = overrideReason
     if (to === 'archived' && selectedArchiveReason.value) body.archivedReason = selectedArchiveReason.value
-    const res = await fetch(`${API_BASE}/standard-answers/${current.value.id}/transition`, {
+    const res = await apiFetch(`${API_BASE}/standard-answers/${current.value.id}/transition`, {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -671,7 +671,7 @@ async function doDelete() {
   deleting.value = true
   saveErr.value = null
   try {
-    const res = await fetch(`${API_BASE}/standard-answers/${current.value.id}`, {
+    const res = await apiFetch(`${API_BASE}/standard-answers/${current.value.id}`, {
       method: 'DELETE', credentials: 'include',
     })
     if (res.status === 403) throw new Error('삭제는 admin 권한이 필요합니다.')

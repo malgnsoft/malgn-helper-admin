@@ -74,8 +74,8 @@ const services = ref<Service[]>([])
 async function loadCatalog() {
   try {
     const [tRes, sRes] = await Promise.all([
-      fetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
-      fetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
     ])
     if (tRes.ok) topics.value = ((await tRes.json()) as { rows: Topic[] }).rows?.filter(t => t.active) ?? []
     if (sRes.ok) services.value = ((await sRes.json()) as { rows: Service[] }).rows?.filter(s => s.active) ?? []
@@ -158,7 +158,7 @@ async function runScan() {
     const lim = Number(form.limit)
     if (Number.isFinite(lim) && lim > 0) body.limit = Math.min(lim, 200)
 
-    const res = await fetch(`${API_BASE}/pms/harvest/scan`, {
+    const res = await apiFetch(`${API_BASE}/pms/harvest/scan`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -213,7 +213,7 @@ async function runCommit() {
       item.scope = r.editServiceId ? 'service' : 'common'
       return item
     })
-    const res = await fetch(`${API_BASE}/pms/harvest/commit`, {
+    const res = await apiFetch(`${API_BASE}/pms/harvest/commit`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

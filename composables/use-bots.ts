@@ -184,7 +184,7 @@ export function useServiceOptions() {
     if (loaded.value && !force) return;
     pending.value = true;
     try {
-      const res = await fetch(`${API_BASE}/services`, { credentials: "include", cache: "no-store" });
+      const res = await apiFetch(`${API_BASE}/services`, { credentials: "include", cache: "no-store" });
       if (res.ok) {
         const rows = ((await res.json()) as { rows?: ServiceOption[] }).rows ?? [];
         services.value = rows.map((r) => ({ id: r.id, slug: r.slug, name: r.name }));
@@ -309,7 +309,7 @@ export function useBots() {
     if (params.botStatus) qs.set("bot_status", params.botStatus);
     qs.set("limit", String(params.limit ?? 200));
     qs.set("offset", String(params.offset ?? 0));
-    const res = await fetch(`${API_BASE}/admin/bots?${qs.toString()}`, {
+    const res = await apiFetch(`${API_BASE}/admin/bots?${qs.toString()}`, {
       credentials: "include",
       cache: "no-store",
     });
@@ -324,7 +324,7 @@ export function useBots() {
   }
 
   async function getOne(id: string): Promise<Bot> {
-    const res = await fetch(`${API_BASE}/admin/bots/${id}`, { credentials: "include", cache: "no-store" });
+    const res = await apiFetch(`${API_BASE}/admin/bots/${id}`, { credentials: "include", cache: "no-store" });
     if (!res.ok) {
       if (res.status === 403) throw new Error("developer 권한이 필요합니다.");
       if (res.status === 404) throw new Error("봇을 찾을 수 없습니다.");
@@ -337,7 +337,7 @@ export function useBots() {
   async function save(b: Bot): Promise<Bot> {
     const isNew = !b.id;
     const url = isNew ? `${API_BASE}/admin/bots` : `${API_BASE}/admin/bots/${b.id}`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: isNew ? "POST" : "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -352,7 +352,7 @@ export function useBots() {
   }
 
   async function remove(id: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/admin/bots/${id}`, { method: "DELETE", credentials: "include" });
+    const res = await apiFetch(`${API_BASE}/admin/bots/${id}`, { method: "DELETE", credentials: "include" });
     if (!res.ok) {
       if (res.status === 403) throw new Error("admin 권한이 필요합니다.");
       throw new Error(`API ${res.status}`);
@@ -365,7 +365,7 @@ export function useBots() {
     const b = bots.value.find((x) => x.id === id);
     if (!b) return;
     const next: BotStatus = b.status === "active" ? "inactive" : "active";
-    const res = await fetch(`${API_BASE}/admin/bots/${id}`, {
+    const res = await apiFetch(`${API_BASE}/admin/bots/${id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

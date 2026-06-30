@@ -60,7 +60,7 @@ async function load() {
     url.searchParams.set('page', String(page.value))
     url.searchParams.set('pageSize', String(PAGE_SIZE))
     if (search.value.trim()) url.searchParams.set('q', search.value.trim())
-    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(res.status === 403 ? '계정 목록 조회 권한이 없습니다.' : `API ${res.status}`)
     const data = (await res.json()) as AccountsResponse
     rows.value = data.rows ?? []

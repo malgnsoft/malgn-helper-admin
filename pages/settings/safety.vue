@@ -46,7 +46,7 @@ async function load() {
   pending.value = true
   error.value = null
   try {
-    const res = await fetch(`${API_BASE}/settings/safety`, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(`${API_BASE}/settings/safety`, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(res.status === 403 ? '설정 조회 권한이 없습니다.' : `API ${res.status}`)
     const data = (await res.json()) as { settings: Record<string, unknown> }
     applySettings(data.settings ?? {})
@@ -86,7 +86,7 @@ async function save() {
       pii_patterns: [...form.pii_patterns],
       blocked_words: [...form.blocked_words],
     }
-    const res = await fetch(`${API_BASE}/settings/safety`, {
+    const res = await apiFetch(`${API_BASE}/settings/safety`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

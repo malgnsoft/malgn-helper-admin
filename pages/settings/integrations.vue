@@ -49,7 +49,7 @@ async function load() {
   pending.value = true
   error.value = null
   try {
-    const res = await fetch(`${API_BASE}/settings/integrations`, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(`${API_BASE}/settings/integrations`, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(res.status === 403 ? '연동 조회 권한이 없습니다.' : `API ${res.status}`)
     items.value = ((await res.json()) as { rows: Integration[] }).rows ?? []
   } catch (e) {
@@ -88,7 +88,7 @@ async function save() {
   saving.value = true
   saveErr.value = null
   try {
-    const res = await fetch(`${API_BASE}/settings/integrations/${editing.value.id}`, {
+    const res = await apiFetch(`${API_BASE}/settings/integrations/${editing.value.id}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

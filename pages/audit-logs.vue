@@ -78,7 +78,7 @@ async function load() {
     const url = new URL(`${API_BASE}/admin/cost`)
     url.searchParams.set('days', String(days.value))
     url.searchParams.set('limit', '100')
-    const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+    const res = await apiFetch(url, { credentials: 'include', cache: 'no-store' })
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = await res.json() as { recent: LogRow[] }
     let list = data.recent ?? []

@@ -54,8 +54,8 @@ async function load() {
   error.value = null
   try {
     const [tRes, sRes] = await Promise.all([
-      fetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
-      fetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/topics`, { credentials: 'include', cache: 'no-store' }),
+      apiFetch(`${API_BASE}/services`, { credentials: 'include', cache: 'no-store' }),
     ])
     if (!tRes.ok) throw new Error(`토픽 ${tRes.status}`)
     if (!sRes.ok) throw new Error(`서비스 ${sRes.status}`)
@@ -135,7 +135,7 @@ async function save() {
     const body = isTopic
       ? { slug: form.slug.trim(), scope: form.scope, label: form.label.trim(), description: form.description.trim(), sortOrder: Number(form.sortOrder), active: form.active }
       : { slug: form.slug.trim(), name: form.label.trim(), note: form.description.trim(), sortOrder: Number(form.sortOrder), active: form.active }
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: editingId.value ? 'PUT' : 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -161,7 +161,7 @@ async function toggleActive(kind: 'topics' | 'services', id: number, next: boole
   if (!isAdmin.value || togglingId.value) return
   togglingId.value = id
   try {
-    const res = await fetch(`${API_BASE}/${kind}/${id}`, {
+    const res = await apiFetch(`${API_BASE}/${kind}/${id}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -197,7 +197,7 @@ async function confirmDelete() {
   if (!delTarget.value) return
   deleting.value = true
   try {
-    const res = await fetch(`${API_BASE}/${delTarget.value.kind}/${delTarget.value.id}`, {
+    const res = await apiFetch(`${API_BASE}/${delTarget.value.kind}/${delTarget.value.id}`, {
       method: 'DELETE',
       credentials: 'include',
     })
