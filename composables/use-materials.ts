@@ -176,6 +176,22 @@ export interface MaterialListResult {
   offset: number;
 }
 
+/** 의미(벡터) 검색 결과 한 건 — GET /materials/search 응답 items. */
+export interface MaterialSearchHit {
+  materialId: number;
+  name: string;
+  type: string;
+  score: number; // 0~1 유사도
+  snippets: string[];
+}
+
+/** 의미 검색 응답 전체. */
+export interface MaterialSearchResult {
+  results: MaterialSearchHit[];
+  /** true면 벡터 검색 인프라(Vectorize) 미준비. */
+  vectorizeUnavailable: boolean;
+}
+
 export function useMaterials() {
   // 현재 로드된 목록(현재 페이지). 상세/삭제/재색인이 이 상태를 갱신한다.
   const materials = useState<Material[]>("admin-materials", () => []);
@@ -212,6 +228,37 @@ export function useMaterials() {
       total: data.total ?? rows.length,
       limit: data.limit ?? filters.limit ?? 60,
       offset: data.offset ?? filters.offset ?? 0,
+    };
+  }
+
+  /**
+   * 의미(벡터) 검색 — 자료 본문 임베딩 기반 유사도 검색.
+   * 키워드 LIKE 필터(loadMaterials)와 별개이며, materials 상태를 건드리지 않는다.
+   *   - q: 질의(공백만이면 호출하지 않음), topK: 상위 n건(기본 8).
+   */
+  async function searchMaterials(q: string, topK = 8): Promise<MaterialSearchResult> {
+    const query = q.trim();
+    if (!query) return { results: [], vectorizeUnavailable: false };
+    const url = new URL(`${API_BASE}/materials/search`);
+    url.searchParams.set("q", query);
+    url.searchParams.set("topK", String(topK));
+
+    const res = await apiFetch(url, { credentials: "include", cache: "no-store" });
+    if (!res.ok) throw new Error(await readError(res));
+
+    const data = (await res.json()) as {
+      results?: MaterialSearchHit[];
+      vectorizeUnavailable?: boolean;
+    };
+    return {
+      results: (data.results ?? []).map((r) => ({
+        materialId: r.materialId,
+        name: r.name ?? "",
+        type: r.type ?? "",
+        score: typeof r.score === "number" ? r.score : 0,
+        snippets: Array.isArray(r.snippets) ? r.snippets.filter(Boolean) : [],
+      })),
+      vectorizeUnavailable: data.vectorizeUnavailable === true,
     };
   }
 
@@ -324,6 +371,7 @@ export function useMaterials() {
     get,
     byIds,
     loadMaterials,
+    searchMaterials,
     getMaterial,
     createMaterial,
     deleteMaterial,

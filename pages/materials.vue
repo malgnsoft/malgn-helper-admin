@@ -17,6 +17,9 @@ import {
   Download,
   Bot as BotIcon,
   Loader2,
+  Sparkles,
+  Search,
+  ChevronDown,
 } from "lucide-vue-next";
 
 useHead({ title: "학습 자료 · 맑은도우미 Admin" });
@@ -25,6 +28,7 @@ const {
   materials,
   get,
   loadMaterials,
+  searchMaterials,
   getMaterial,
   createMaterial,
   deleteMaterial,
@@ -49,6 +53,57 @@ function notify(msg: string, type: "error" | "success" = "success") {
   toastTimer = setTimeout(() => {
     toast.value = null;
   }, 4000);
+}
+
+// ── 의미(벡터) 검색 ── 자료 본문 임베딩 기반 유사도. 키워드 필터와 별개.
+const semQuery = ref("");
+const semOpen = ref(true);
+const semPending = ref(false);
+const semError = ref<string | null>(null);
+const semSearched = ref(false); // 한 번이라도 검색을 실행했는지
+const semResults = ref<MaterialSearchHit[]>([]);
+const semVectorizeUnavailable = ref(false);
+const SEM_TOP_K = 8;
+
+const canSemSearch = computed(() => !semPending.value && !!semQuery.value.trim());
+
+async function runSemSearch() {
+  if (!canSemSearch.value) return;
+  semPending.value = true;
+  semError.value = null;
+  try {
+    const r = await searchMaterials(semQuery.value, SEM_TOP_K);
+    semResults.value = r.results;
+    semVectorizeUnavailable.value = r.vectorizeUnavailable;
+    semSearched.value = true;
+    semOpen.value = true;
+  } catch (e) {
+    semError.value = (e as Error).message;
+    semResults.value = [];
+    semVectorizeUnavailable.value = false;
+    semSearched.value = true;
+  } finally {
+    semPending.value = false;
+  }
+}
+
+function clearSemSearch() {
+  semQuery.value = "";
+  semResults.value = [];
+  semVectorizeUnavailable.value = false;
+  semError.value = null;
+  semSearched.value = false;
+}
+
+/** score(0~1) → 퍼센트 표기. */
+function scorePct(score: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, score)) * 100)}%`;
+}
+/** 검색 결과 type 문자열 → 표시 메타(미지의 값이면 안전 폴백). */
+function hitTypeMeta(type: string): { label: string; cls: string } {
+  return (
+    MATERIAL_TYPE_META[type as MaterialType] ?? { label: type || "자료", cls: "bg-slate-100 text-slate-600" }
+  );
 }
 
 // ── 목록 / 필터 / 페이지네이션 ──
@@ -357,6 +412,128 @@ function chipCls(on: boolean) {
       <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
         <p class="text-[11px] text-slate-400">총 청크<span class="ml-1 text-slate-300">(현재 페이지)</span></p>
         <p class="mt-0.5 font-mono text-[20px] font-bold tabular-nums text-slate-900">{{ stat.chunks.toLocaleString() }}</p>
+      </div>
+    </section>
+
+    <!-- 의미(벡터) 검색 — 자료 본문 임베딩 기반. 키워드 필터와 별개 섹션. -->
+    <section class="mb-4 rounded-xl border border-primary-200 bg-primary-50/40 p-4">
+      <div class="flex items-center gap-2">
+        <Sparkles class="size-4 text-primary-600" />
+        <h2 class="text-[13px] font-semibold text-slate-800">의미 검색<span class="ml-1.5 font-normal text-slate-500">(자료 본문 기반)</span></h2>
+        <button
+          type="button"
+          class="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-slate-500 hover:bg-white/70 hover:text-slate-700"
+          @click="semOpen = !semOpen"
+        >
+          {{ semOpen ? "접기" : "펼치기" }}
+          <ChevronDown class="size-3.5 transition-transform" :class="semOpen ? 'rotate-180' : ''" />
+        </button>
+      </div>
+
+      <div v-show="semOpen">
+        <p class="mt-1 text-[11.5px] text-slate-500">
+          질문·문장으로 검색하면 자료 본문과의 유사도로 찾아줍니다. 자료명·태그만 훑는 아래 키워드 필터와 다릅니다.
+        </p>
+
+        <div class="mt-3 flex gap-2">
+          <div class="relative flex-1">
+            <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input
+              v-model="semQuery"
+              type="text"
+              class="h-10 w-full rounded-md bg-white pl-9 pr-3 text-[13px] text-slate-700 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="예: 수료증 재발급은 어떻게 하나요? 후 Enter"
+              @keyup.enter="runSemSearch"
+            />
+          </div>
+          <button
+            type="button"
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+            :disabled="!canSemSearch"
+            @click="runSemSearch"
+          >
+            <Loader2 v-if="semPending" class="size-4 animate-spin" />
+            <Sparkles v-else class="size-4" />의미 검색
+          </button>
+          <button
+            v-if="semSearched || semQuery"
+            type="button"
+            class="inline-flex shrink-0 items-center rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+            @click="clearSemSearch"
+          >
+            지우기
+          </button>
+        </div>
+
+        <!-- 로딩 -->
+        <div v-if="semPending" class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-10 text-[13px] text-slate-500">
+          <Loader2 class="size-4 animate-spin" />의미 검색 중…
+        </div>
+
+        <!-- 에러 -->
+        <div v-else-if="semError" class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+          <p class="text-[13px] font-medium text-rose-700">{{ semError }}</p>
+          <button
+            type="button"
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-[12px] font-medium text-rose-600 hover:bg-rose-50"
+            @click="runSemSearch"
+          >
+            <RefreshCw class="size-3.5" />다시 시도
+          </button>
+        </div>
+
+        <!-- 인프라 미준비 -->
+        <div
+          v-else-if="semSearched && semVectorizeUnavailable"
+          class="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800"
+        >
+          의미검색 인프라(벡터)가 아직 준비되지 않았습니다. 아래 키워드 필터를 이용해 주세요.
+        </div>
+
+        <!-- 결과 0건 -->
+        <div
+          v-else-if="semSearched && !semResults.length"
+          class="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-[13px] text-slate-500"
+        >
+          일치하는 자료가 없습니다.
+        </div>
+
+        <!-- 결과 목록 -->
+        <ul v-else-if="semResults.length" class="mt-3 space-y-2">
+          <li v-for="(hit, i) in semResults" :key="`${hit.materialId}-${i}`">
+            <button
+              type="button"
+              class="group flex w-full flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-primary-300 hover:shadow-sm"
+              @click="openDetail(String(hit.materialId))"
+            >
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10.5px] font-semibold"
+                  :class="hitTypeMeta(hit.type).cls"
+                >
+                  {{ hitTypeMeta(hit.type).label }}
+                </span>
+                <span class="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-slate-900 group-hover:text-primary-700">
+                  {{ hit.name || `자료 #${hit.materialId}` }}
+                </span>
+                <span
+                  class="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary-700 ring-1 ring-inset ring-primary-200"
+                  :title="`유사도 ${hit.score.toFixed(2)}`"
+                >
+                  <Sparkles class="size-3" />{{ scorePct(hit.score) }}
+                </span>
+              </div>
+              <p
+                v-for="(sn, si) in hit.snippets.slice(0, 3)"
+                :key="si"
+                class="line-clamp-2 border-l-2 border-slate-200 pl-2.5 text-[12px] leading-relaxed text-slate-600"
+              >
+                {{ sn }}
+              </p>
+              <p v-if="!hit.snippets.length" class="text-[12px] text-slate-400">발췌 미리보기가 없습니다.</p>
+            </button>
+          </li>
+        </ul>
       </div>
     </section>
 
