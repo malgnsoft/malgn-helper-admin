@@ -30,6 +30,7 @@ export const ADMIN_MENU: MenuGroup[] = [
       { key: "escalations", label: "에스컬레이션", path: "/escalations", icon: "bell-ring" },
       { key: "chat-logs", label: "챗봇 로그", path: "/chat-logs", icon: "message-square-text" },
       { key: "qa-evals", label: "Q&A 평가", path: "/qa-evals", icon: "clipboard-check" },
+      { key: "playground", label: "AI 시연", path: "/playground", icon: "sparkles", roles: ["admin", "developer"] },
     ],
   },
   {
