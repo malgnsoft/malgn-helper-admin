@@ -1,26 +1,69 @@
 // composables/use-materials.ts
 // 학습 자료(소스) 라이브러리 — NotebookLM의 "소스"에 해당.
 // 자료 = 파일/URL/텍스트/Q&A 한 건. 봇(use-bots)이 materialSetIds 로 여기서 골라 학습한다.
-// 현재 백엔드 없이 localStorage 영속(데모). 추후 R2 업로드 + OpenSearch 인덱싱 + /materials API 연동 예정.
+// 실 백엔드 /materials 연동(GET/POST/DELETE + reindex/download). 업로드는 R2, 색인은 벡터.
+//   - 목록/생성/삭제/재색인/다운로드 모두 apiFetch(Bearer) 경유.
+//   - index_status: processing|indexed|stored|failed
+//       stored = 저장은 되었으나 본문추출 미지원(예: PDF·영상) → 의미검색(벡터) 미적용.
+
+const API_BASE = "https://malgn-helper-api.malgnsoft.workers.dev";
 
 export type MaterialType = "file" | "url" | "text" | "qa";
-export type MaterialStatus = "indexed" | "processing" | "failed";
+export type MaterialStatus = "indexed" | "processing" | "stored" | "failed";
 
+/** 서버 응답 행/객체 (camelCase) */
+export interface MaterialDto {
+  id: number | string;
+  name: string;
+  type: MaterialType;
+  source: string;
+  format: string;
+  mime: string | null;
+  sizeBytes: number | null;
+  indexStatus: MaterialStatus;
+  summary: string | null;
+  chunks: number | null;
+  tags: string[] | null;
+  services: string[] | null;
+  downloadPath: string | null;
+  createdBy: string | null;
+  createdAt?: string | null;
+  error?: string | null;
+  /** 상세(GET /materials/:id)에서만 채워짐 */
+  extractedTextPreview?: string | null;
+}
+
+/** 화면 모델. 표시 가공(sizeBytes→sizeLabel 등)은 여기(fromDto)에서만 한다. */
 export interface Material {
-  id: string;
+  id: string; // 서버 숫자 id를 문자열화(라우팅/키/봇 참조 호환)
   name: string;
   type: MaterialType;
   source: string; // 파일명 / URL / 텍스트 출처
   format: string; // PDF · DOCX · TXT · URL · Q&A
-  status: MaterialStatus;
+  mime: string; // MIME 타입(원문)
+  indexStatus: MaterialStatus;
   summary: string; // 자동 요약(미리보기)
   chunks: number; // 색인 청크 수
-  sizeLabel: string; // "1.2 MB" / "8쪽" / "1,146건"
+  sizeBytes: number; // 원본 바이트
+  sizeLabel: string; // "1.2 MB" / "—"
   tags: string[];
   services: string[]; // 연관 서비스 slug (use-bots SERVICE_OPTS)
-  addedAt: string; // YYYY-MM-DD
-  error?: string; // failed 사유
+  downloadPath: string | null; // R2 다운로드 경로(있으면 다운로드 버튼 노출)
+  createdBy: string | null;
+  addedAt: string; // YYYY-MM-DD (createdAt 표시 가공)
+  error?: string; // failed/stored 사유
 }
+
+/** 상세 모델 — 본문 미리보기 포함 */
+export interface MaterialDetail extends Material {
+  extractedTextPreview: string;
+}
+
+/** 생성 시 JSON 페이로드(url/text/qa). 파일은 FormData로 별도 전송. */
+export type MaterialCreateJson =
+  | { type: "url"; url: string; name?: string; tags?: string[]; services?: string[] }
+  | { type: "text"; text: string; name?: string; source?: string }
+  | { type: "qa"; question?: string; answer?: string; text?: string; name?: string };
 
 export const MATERIAL_TYPE_META: Record<MaterialType, { label: string; cls: string }> = {
   file: { label: "파일", cls: "bg-violet-50 text-violet-700" },
@@ -35,11 +78,12 @@ export const MATERIAL_STATUS_META: Record<
 > = {
   indexed: { label: "색인 완료", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
   processing: { label: "처리 중", cls: "bg-blue-50 text-blue-700 ring-blue-200", dot: "bg-blue-500" },
+  stored: { label: "저장됨", cls: "bg-slate-100 text-slate-600 ring-slate-200", dot: "bg-slate-400" },
   failed: { label: "실패", cls: "bg-rose-50 text-rose-700 ring-rose-200", dot: "bg-rose-500" },
 };
 
 export const MATERIAL_TYPE_OPTS: { value: MaterialType; label: string; format: string }[] = [
-  { value: "file", label: "파일 (PDF·DOCX·TXT)", format: "PDF" },
+  { value: "file", label: "파일 (PDF·DOCX·TXT·CSV·MD·HTML)", format: "FILE" },
   { value: "url", label: "URL (웹페이지)", format: "URL" },
   { value: "text", label: "텍스트 붙여넣기", format: "TXT" },
   { value: "qa", label: "Q&A 세트", format: "Q&A" },
@@ -57,241 +101,233 @@ export const MATERIAL_STATUS_FILTER = [
   { value: "", label: "전체 상태" },
   { value: "indexed", label: "색인 완료" },
   { value: "processing", label: "처리 중" },
+  { value: "stored", label: "저장됨" },
   { value: "failed", label: "실패" },
 ];
 
-function nowDate(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+/** 파일 업로드 accept — 문서·텍스트·표·마크업 계열. */
+export const MATERIAL_FILE_ACCEPT =
+  ".pdf,.doc,.docx,.ppt,.pptx,.hwp,.hwpx,.txt,.md,.csv,.tsv,.html,.htm";
 
-function estimateChunks(m: Pick<Material, "type" | "name">): number {
-  const base: Record<MaterialType, number> = { file: 42, url: 16, text: 26, qa: 88 };
-  return (base[m.type] ?? 20) + (m.name.length % 24);
-}
-
-const SEED_MATERIALS: Material[] = [
-  {
-    id: "mat-user-manual",
-    name: "STEP 온라인 교육시스템 사용자 매뉴얼 v3.2",
-    type: "file",
-    source: "step-user-manual-v3.2.pdf",
-    format: "PDF",
-    status: "indexed",
-    summary: "로그인·수강신청·진도·과제·수료까지 LMS 사용 전반을 단계별로 설명한 공식 매뉴얼.",
-    chunks: 84,
-    sizeLabel: "1.2 MB",
-    tags: ["매뉴얼", "LMS"],
-    services: ["lms-general"],
-    addedAt: "2026-05-10",
-  },
-  {
-    id: "mat-admin-manual",
-    name: "관리자 매뉴얼 v2 (과정 개설·운영)",
-    type: "file",
-    source: "admin-manual-v2.pdf",
-    format: "PDF",
-    status: "indexed",
-    summary: "과정 개설, 학습자 관리, 통계, 권한 설정 등 운영자 기능을 다룬 매뉴얼.",
-    chunks: 61,
-    sizeLabel: "980 KB",
-    tags: ["매뉴얼", "관리자"],
-    services: ["lms-general", "lms-public"],
-    addedAt: "2026-05-12",
-  },
-  {
-    id: "mat-refund-policy",
-    name: "환불·정산 정책 안내",
-    type: "file",
-    source: "refund-policy-2026.docx",
-    format: "DOCX",
-    status: "indexed",
-    summary: "환불 기한, 부분 환불 기준, 세금계산서 발행, 정산 주기 등 환불·정산 규정.",
-    chunks: 18,
-    sizeLabel: "240 KB",
-    tags: ["정책", "환불"],
-    services: ["lms-refund"],
-    addedAt: "2026-05-18",
-  },
-  {
-    id: "mat-faq",
-    name: "자주 묻는 질문 모음 (2026)",
-    type: "text",
-    source: "붙여넣은 텍스트",
-    format: "TXT",
-    status: "indexed",
-    summary: "로그인 오류, 비밀번호 재설정, 수료증 발급 등 빈출 FAQ를 정리한 문서.",
-    chunks: 33,
-    sizeLabel: "21 KB",
-    tags: ["FAQ"],
-    services: ["lms-general"],
-    addedAt: "2026-05-20",
-  },
-  {
-    id: "mat-legacy-qa",
-    name: "기존 상담 Q&A · LMS 일반",
-    type: "qa",
-    source: "PMS 누적 상담 추출",
-    format: "Q&A",
-    status: "indexed",
-    summary: "PMS에 누적된 상담 중 LMS 일반 카테고리의 검증된 질의·응답 모음.",
-    chunks: 126,
-    sizeLabel: "1,146건",
-    tags: ["Q&A", "레거시"],
-    services: ["lms-general"],
-    addedAt: "2026-05-22",
-  },
-  {
-    id: "mat-security-guide",
-    name: "보안 설정 가이드",
-    type: "url",
-    source: "https://help.malgn.co.kr/security",
-    format: "URL",
-    status: "indexed",
-    summary: "2단계 인증, 접근 권한, 감사 로그 설정 등 보안 관련 안내 페이지.",
-    chunks: 14,
-    sizeLabel: "—",
-    tags: ["보안"],
-    services: ["lms-security", "lms-public"],
-    addedAt: "2026-05-28",
-  },
-  {
-    id: "mat-video-enroll",
-    name: "수강신청 교육영상 스크립트",
-    type: "text",
-    source: "enroll-video-transcript.txt",
-    format: "TXT",
-    status: "processing",
-    summary: "수강신청 화면 흐름을 안내하는 교육영상의 트랜스크립트(색인 처리 중).",
-    chunks: 0,
-    sizeLabel: "8쪽",
-    tags: ["영상", "수강신청"],
-    services: ["lms-general"],
-    addedAt: "2026-06-09",
-  },
-  {
-    id: "mat-public-guide",
-    name: "공공기관 LMS 운영 가이드",
-    type: "file",
-    source: "public-ops-guide.pdf",
-    format: "PDF",
-    status: "failed",
-    summary: "공공기관 대상 LMS 운영 절차 안내(표 추출 실패로 재색인 필요).",
-    chunks: 0,
-    sizeLabel: "3.1 MB",
-    tags: ["공공"],
-    services: ["lms-public"],
-    addedAt: "2026-06-10",
-    error: "표/이미지 추출 실패 — 재색인이 필요합니다.",
-  },
-];
-
-const STORAGE_KEY = "malgn-admin-materials-v1";
-
-function clone<T>(v: T): T {
-  return JSON.parse(JSON.stringify(v));
-}
-function loadFromStorage(): Material[] | null {
-  if (!import.meta.client) return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Material[]) : null;
-  } catch {
-    return null;
+// ── 표시 가공 ──
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
   }
+  const s = i === 0 || v >= 100 ? Math.round(v).toString() : v.toFixed(1);
+  return `${s} ${units[i]}`;
+}
+
+function fromDto(d: MaterialDto): Material {
+  const bytes = typeof d.sizeBytes === "number" ? d.sizeBytes : 0;
+  return {
+    id: String(d.id),
+    name: d.name ?? "",
+    type: d.type,
+    source: d.source ?? "",
+    format: d.format ?? "",
+    mime: d.mime ?? "",
+    indexStatus: d.indexStatus,
+    summary: d.summary ?? "",
+    chunks: typeof d.chunks === "number" ? d.chunks : 0,
+    sizeBytes: bytes,
+    sizeLabel: formatBytes(bytes),
+    tags: d.tags ?? [],
+    services: d.services ?? [],
+    downloadPath: d.downloadPath ?? null,
+    createdBy: d.createdBy ?? null,
+    addedAt: (d.createdAt ?? "").slice(0, 10),
+    error: d.error ?? undefined,
+  };
+}
+
+/** 서버 에러 메시지 추출(가능하면 body.error, 없으면 상태코드). */
+async function readError(res: Response): Promise<string> {
+  if (res.status === 401) return "인증이 필요합니다. 다시 로그인해 주세요.";
+  if (res.status === 403) return "developer 이상 권한이 필요합니다.";
+  if (res.status === 404) return "자료를 찾을 수 없습니다.";
+  if (res.status === 413) return "파일 용량이 허용 범위를 초과했습니다.";
+  try {
+    const j = (await res.json()) as { error?: string };
+    if (j.error) return j.error;
+  } catch {
+    /* JSON 아님 — 무시 */
+  }
+  return `요청 실패 (API ${res.status})`;
+}
+
+export interface MaterialListFilters {
+  type?: MaterialType | "";
+  indexStatus?: MaterialStatus | "";
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface MaterialListResult {
+  rows: Material[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export function useMaterials() {
-  const materials = useState<Material[]>("admin-materials", () => clone(SEED_MATERIALS));
-  const hydrated = useState<boolean>("admin-materials-hydrated", () => false);
+  // 현재 로드된 목록(현재 페이지). 상세/삭제/재색인이 이 상태를 갱신한다.
+  const materials = useState<Material[]>("admin-materials", () => []);
 
-  function ensureHydrated() {
-    if (import.meta.client && !hydrated.value) {
-      const stored = loadFromStorage();
-      if (stored && Array.isArray(stored)) materials.value = stored;
-      hydrated.value = true;
-    }
-  }
-  function persist() {
-    if (import.meta.client) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(materials.value));
-      } catch {
-        /* quota 무시 */
-      }
-    }
-  }
-
-  function get(id: string) {
+  function get(id: string): Material | undefined {
     return materials.value.find((m) => m.id === id);
   }
-  function byIds(ids: string[]) {
+  function byIds(ids: string[]): Material[] {
     return ids.map((id) => get(id)).filter((m): m is Material => !!m);
   }
 
-  /** 자료 추가 — 처리중 상태로 들어오고, markIndexed 로 색인 완료 처리(데모) */
-  function add(m: Material) {
-    materials.value.unshift(clone(m));
-    persist();
-  }
-  function update(m: Material) {
-    const i = materials.value.findIndex((x) => x.id === m.id);
-    if (i >= 0) materials.value[i] = clone(m);
-    persist();
-  }
-  function remove(id: string) {
-    materials.value = materials.value.filter((m) => m.id !== id);
-    persist();
-  }
+  /** 목록 조회 — 필터/페이지네이션 서버 전달. materials 상태를 갱신. */
+  async function loadMaterials(filters: MaterialListFilters = {}): Promise<MaterialListResult> {
+    const url = new URL(`${API_BASE}/materials`);
+    if (filters.type) url.searchParams.set("type", filters.type);
+    if (filters.indexStatus) url.searchParams.set("indexStatus", filters.indexStatus);
+    if (filters.search && filters.search.trim()) url.searchParams.set("search", filters.search.trim());
+    url.searchParams.set("limit", String(filters.limit ?? 60));
+    url.searchParams.set("offset", String(filters.offset ?? 0));
 
-  /** 색인 완료 처리(데모 시뮬레이션) */
-  function markIndexed(id: string) {
-    const m = get(id);
-    if (!m) return;
-    m.status = "indexed";
-    m.error = undefined;
-    m.chunks = estimateChunks(m);
-    persist();
-  }
-  /** 재색인 — 처리중으로 되돌림 (호출부에서 markIndexed 예약) */
-  function reindex(id: string) {
-    const m = get(id);
-    if (!m) return;
-    m.status = "processing";
-    m.chunks = 0;
-    m.error = undefined;
-    persist();
-  }
+    const res = await apiFetch(url, { credentials: "include", cache: "no-store" });
+    if (!res.ok) throw new Error(await readError(res));
 
-  function blankMaterial(type: MaterialType = "file"): Material {
-    const meta = MATERIAL_TYPE_OPTS.find((o) => o.value === type)!;
-    return {
-      id: `mat-${Date.now().toString(36)}`,
-      name: "",
-      type,
-      source: "",
-      format: meta.format,
-      status: "processing",
-      summary: "",
-      chunks: 0,
-      sizeLabel: "—",
-      tags: [],
-      services: [],
-      addedAt: nowDate(),
+    const data = (await res.json()) as {
+      total?: number;
+      limit?: number;
+      offset?: number;
+      rows?: MaterialDto[];
     };
+    const rows = (data.rows ?? []).map(fromDto);
+    materials.value = rows;
+    return {
+      rows,
+      total: data.total ?? rows.length,
+      limit: data.limit ?? filters.limit ?? 60,
+      offset: data.offset ?? filters.offset ?? 0,
+    };
+  }
+
+  /** 상세 조회 — 본문 미리보기 포함. */
+  async function getMaterial(id: string): Promise<MaterialDetail> {
+    const res = await apiFetch(`${API_BASE}/materials/${id}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const d = (await res.json()) as MaterialDto;
+    return { ...fromDto(d), extractedTextPreview: d.extractedTextPreview ?? "" };
+  }
+
+  /**
+   * 자료 생성.
+   *  - 파일: FormData(field `file` 등)를 그대로 전달 → multipart POST (Content-Type 미지정: 브라우저가 boundary 설정).
+   *  - url/text/qa: MaterialCreateJson → application/json POST.
+   */
+  async function createMaterial(payload: FormData | MaterialCreateJson): Promise<Material> {
+    const isForm = typeof FormData !== "undefined" && payload instanceof FormData;
+    const init: RequestInit = {
+      method: "POST",
+      credentials: "include",
+    };
+    if (isForm) {
+      init.body = payload;
+    } else {
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(payload);
+    }
+    const res = await apiFetch(`${API_BASE}/materials`, init);
+    if (!res.ok) throw new Error(await readError(res));
+    const d = (await res.json()) as MaterialDto;
+    const created = fromDto(d);
+    // 새 자료를 현재 목록 상단에 반영(이후 페이지에서 loadMaterials로 재동기화).
+    materials.value = [created, ...materials.value.filter((m) => m.id !== created.id)];
+    return created;
+  }
+
+  /** 삭제(soft). 성공 시 목록 상태에서 제거. */
+  async function deleteMaterial(id: string): Promise<void> {
+    const res = await apiFetch(`${API_BASE}/materials/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    materials.value = materials.value.filter((m) => m.id !== id);
+  }
+
+  /** 재색인 요청. 응답에 자료 dto가 오면 상태 갱신. */
+  async function reindexMaterial(id: string): Promise<Material | null> {
+    const res = await apiFetch(`${API_BASE}/materials/${id}/reindex`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    let updated: Material | null = null;
+    try {
+      const d = (await res.json()) as MaterialDto;
+      if (d && d.id !== undefined) {
+        updated = fromDto(d);
+        const i = materials.value.findIndex((m) => m.id === updated!.id);
+        if (i >= 0) materials.value[i] = updated;
+      }
+    } catch {
+      /* 응답 바디 없음 — 호출부가 loadMaterials로 재동기화 */
+    }
+    return updated;
+  }
+
+  /**
+   * 다운로드 — 인증(apiFetch)으로 blob을 받아 브라우저 저장을 트리거.
+   * filename 미지정 시 Content-Disposition → 자료명 순으로 사용.
+   */
+  async function downloadMaterial(id: string, filename?: string): Promise<void> {
+    if (!import.meta.client) return;
+    const res = await apiFetch(`${API_BASE}/materials/${id}/download`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(await readError(res));
+
+    let name = filename ?? "";
+    if (!name) {
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(cd);
+      const plain = /filename="?([^";]+)"?/i.exec(cd);
+      if (star?.[1]) name = decodeURIComponent(star[1].trim());
+      else if (plain?.[1]) name = plain[1].trim();
+    }
+    if (!name) name = get(id)?.source || get(id)?.name || `material-${id}`;
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 
   return {
     materials,
-    ensureHydrated,
     get,
     byIds,
-    add,
-    update,
-    remove,
-    markIndexed,
-    reindex,
-    blankMaterial,
+    loadMaterials,
+    getMaterial,
+    createMaterial,
+    deleteMaterial,
+    reindexMaterial,
+    downloadMaterial,
   };
 }
